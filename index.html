@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blackjack Tease 🃏🍻</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🃏</text></svg>">
-    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -90,7 +94,7 @@
             <button class="btn btn-success" onclick="playerHit()">🃏 Carte</button>
             <button class="btn btn-secondary" onclick="playerStand()">✋ Stop</button>
             <button class="btn btn-accent" onclick="playerDouble()" id="btn-double">💰 Doubler</button>
-            <button class="btn" onclick="playerSplit()" id="btn-split">✂️ Split</button>
+            <button class="btn" onclick="playerSplit()" id="btn-split" style="display:none;">✂️ Split</button>
         </div>
         <div class="waiting-text" id="game-waiting">En attente de <span id="waiting-player">???</span>...</div>
     </div>

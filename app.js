@@ -420,12 +420,14 @@ function updateGame() {
     var dealer = localState.players ? localState.players[localState.dealer] : null;
     document.getElementById('game-dealer-name').textContent = (dealer ? dealer.emoji : '?') + ' ' + (dealer ? dealer.name : '???');
     
+    var dealerRevealed = currentPlayer === 'dealer' || gameEnded;
+    
     document.getElementById('dealer-cards').innerHTML = dealerHand.map(function(c, i) {
-        if (i === 1 && !gameEnded) return '<div class="card hidden"></div>';
+        if (i === 1 && !dealerRevealed) return '<div class="card hidden"></div>';
         return renderCard(c);
     }).join('');
     
-    document.getElementById('dealer-score').textContent = gameEnded ? calcScore(dealerHand) : (dealerHand[0] ? getCardValue(dealerHand[0]) : '?');
+    document.getElementById('dealer-score').textContent = dealerRevealed ? calcScore(dealerHand) : (dealerHand[0] ? getCardValue(dealerHand[0]) : '?');
     
     var myGame = document.getElementById('my-game');
     var me = localState.players ? localState.players[myId] : null;

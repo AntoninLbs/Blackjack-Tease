@@ -123,7 +123,9 @@ function createRoom() {
             bet: '',
             hand: '',
             status: 'waiting',
-            totalDrinks: 0,
+            totalGorgees: 0,
+            totalDemi: 0,
+            totalCulSec: 0,
             joined: ts
         });
     }).then(function() {
@@ -179,7 +181,9 @@ function joinRoom() {
             bet: '',
             hand: '',
             status: 'waiting',
-            totalDrinks: 0,
+            totalGorgees: 0,
+            totalDemi: 0,
+            totalCulSec: 0,
             joined: Date.now()
         });
     }).then(function() {
@@ -340,19 +344,44 @@ function updateBetting() {
 }
 
 function renderBetOptions() {
-    document.getElementById('bet-options').innerHTML = 
-        '<div class="bet-option ' + (selectedBet.amount===1?'selected':'') + '" onclick="selectBet(1,\'normal\',this)"><span class="number">1</span><span class="label">gorgée</span></div>' +
-        '<div class="bet-option ' + (selectedBet.amount===2&&selectedBet.type==='normal'?'selected':'') + '" onclick="selectBet(2,\'normal\',this)"><span class="number">2</span><span class="label">gorgées</span></div>' +
-        '<div class="bet-option ' + (selectedBet.amount===3?'selected':'') + '" onclick="selectBet(3,\'normal\',this)"><span class="number">3</span><span class="label">gorgées</span></div>' +
-        '<div class="bet-option ' + (selectedBet.amount===5&&selectedBet.type==='normal'?'selected':'') + '" onclick="selectBet(5,\'normal\',this)"><span class="number">5</span><span class="label">gorgées</span></div>' +
-        '<div class="bet-option demi ' + (selectedBet.type==='demi'?'selected':'') + '" onclick="selectBet(5,\'demi\',this)"><span class="number">½</span><span class="label">cul sec</span></div>' +
-        '<div class="bet-option special ' + (selectedBet.type==='culsec'?'selected':'') + '" onclick="selectBet(10,\'culsec\',this)"><span class="number">🍺</span><span class="label">cul sec</span></div>';
+    var html = '<div class="bet-custom">' +
+        '<label>Nombre de gorgées</label>' +
+        '<div class="bet-input-row">' +
+            '<button class="btn-adjust" onclick="adjustBet(-1)">−</button>' +
+            '<input type="number" id="bet-amount-input" min="1" max="50" value="' + selectedBet.amount + '" onchange="updateBetAmount(this.value)">' +
+            '<button class="btn-adjust" onclick="adjustBet(1)">+</button>' +
+        '</div>' +
+    '</div>' +
+    '<div class="bet-specials">' +
+        '<div class="bet-option demi ' + (selectedBet.type==='demi'?'selected':'') + '" onclick="selectBetType(\'demi\')">' +
+            '<span class="number">½</span><span class="label">cul sec</span>' +
+        '</div>' +
+        '<div class="bet-option special ' + (selectedBet.type==='culsec'?'selected':'') + '" onclick="selectBetType(\'culsec\')">' +
+            '<span class="number">🍺</span><span class="label">cul sec</span>' +
+        '</div>' +
+    '</div>';
+    document.getElementById('bet-options').innerHTML = html;
 }
 
-function selectBet(amount, type, el) {
-    selectedBet = {amount: amount, type: type};
+function adjustBet(delta) {
+    var input = document.getElementById('bet-amount-input');
+    var newVal = Math.max(1, Math.min(50, parseInt(input.value) + delta));
+    input.value = newVal;
+    selectedBet = {amount: newVal, type: 'normal'};
     document.querySelectorAll('.bet-option').forEach(function(e) { e.classList.remove('selected'); });
-    el.classList.add('selected');
+}
+
+function updateBetAmount(val) {
+    var amount = Math.max(1, Math.min(50, parseInt(val) || 1));
+    document.getElementById('bet-amount-input').value = amount;
+    selectedBet = {amount: amount, type: 'normal'};
+    document.querySelectorAll('.bet-option').forEach(function(e) { e.classList.remove('selected'); });
+}
+
+function selectBetType(type) {
+    selectedBet = {amount: 0, type: type};
+    document.querySelectorAll('.bet-option').forEach(function(e) { e.classList.remove('selected'); });
+    document.querySelector('.bet-option.' + (type === 'culsec' ? 'special' : type)).classList.add('selected');
 }
 
 function confirmBet() {
@@ -639,7 +668,7 @@ function calculateResults(dealerHand) {
     var dealerScore = calcScore(dealerHand);
     var dealerBust = dealerScore > 21;
     var order = JSON.parse(localState.playerOrder || '[]');
-    var dealerDrinks = 0;
+    var dealerGorgees = 0, dealerDemi = 0, dealerCulSec = 0;
     
     var updates = {};
     
@@ -647,28 +676,39 @@ function calculateResults(dealerHand) {
         var p = localState.players[id];
         var hand = JSON.parse(p.hand || '[]');
         var score = calcScore(hand);
-        var bet = JSON.parse(p.bet || '{"amount":2}');
+        var bet = JSON.parse(p.bet || '{"amount":2,"type":"normal"}');
         var bust = p.status === 'bust' || score > 21;
         
-        var status = 'push', drinks = 0;
+        var status = 'push';
+        var addGorgees = 0, addDemi = 0, addCulSec = 0;
         
         if (bust) {
             status = 'lost';
-            drinks = bet.amount;
+            if (bet.type === 'culsec') addCulSec = 1;
+            else if (bet.type === 'demi') addDemi = 1;
+            else addGorgees = bet.amount;
         } else if (dealerBust || score > dealerScore) {
             status = 'won';
-            dealerDrinks += bet.amount;
+            if (bet.type === 'culsec') dealerCulSec += 1;
+            else if (bet.type === 'demi') dealerDemi += 1;
+            else dealerGorgees += bet.amount;
         } else if (score < dealerScore) {
             status = 'lost';
-            drinks = bet.amount;
+            if (bet.type === 'culsec') addCulSec = 1;
+            else if (bet.type === 'demi') addDemi = 1;
+            else addGorgees = bet.amount;
         }
         
         updates['players/' + id + '/status'] = status;
-        updates['players/' + id + '/totalDrinks'] = (p.totalDrinks || 0) + drinks;
+        updates['players/' + id + '/totalGorgees'] = (p.totalGorgees || 0) + addGorgees;
+        updates['players/' + id + '/totalDemi'] = (p.totalDemi || 0) + addDemi;
+        updates['players/' + id + '/totalCulSec'] = (p.totalCulSec || 0) + addCulSec;
     });
     
     var dealer = localState.players[localState.dealer];
-    updates['players/' + localState.dealer + '/totalDrinks'] = (dealer ? dealer.totalDrinks || 0 : 0) + dealerDrinks;
+    updates['players/' + localState.dealer + '/totalGorgees'] = (dealer ? dealer.totalGorgees || 0 : 0) + dealerGorgees;
+    updates['players/' + localState.dealer + '/totalDemi'] = (dealer ? dealer.totalDemi || 0 : 0) + dealerDemi;
+    updates['players/' + localState.dealer + '/totalCulSec'] = (dealer ? dealer.totalCulSec || 0 : 0) + dealerCulSec;
     
     updates['status'] = 'results';
     updates['currentPlayer'] = 'done';
@@ -696,19 +736,32 @@ function updateResults() {
         });
     }
     
-    var sorted = players.slice().sort(function(a, b) { return (b.totalDrinks || 0) - (a.totalDrinks || 0); });
+    var sorted = players.slice().sort(function(a, b) { 
+        var scoreA = (a.totalGorgees || 0) + (a.totalDemi || 0) * 5 + (a.totalCulSec || 0) * 10;
+        var scoreB = (b.totalGorgees || 0) + (b.totalDemi || 0) * 5 + (b.totalCulSec || 0) * 10;
+        return scoreB - scoreA;
+    });
     
     document.getElementById('scoreboard').innerHTML = sorted.map(function(p, i) {
         var rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
+        var drinks = formatDrinks(p);
         return '<div class="score-item ' + (i===0?'first':'') + '">' +
             '<span class="rank">' + rank + '</span>' +
             '<span class="avatar">' + p.emoji + '</span>' +
             '<div class="info"><div class="name">' + p.name + (p.id===localState.dealer?' (Banque)':'') + '</div></div>' +
-            '<span class="drinks">' + (p.totalDrinks || 0) + ' 🍺</span>' +
+            '<span class="drinks">' + drinks + '</span>' +
         '</div>';
     }).join('');
     
     document.getElementById('btn-next-round').style.display = isHost ? 'block' : 'none';
+}
+
+function formatDrinks(p) {
+    var parts = [];
+    if (p.totalGorgees > 0) parts.push(p.totalGorgees + ' 🍺');
+    if (p.totalDemi > 0) parts.push(p.totalDemi + ' ½');
+    if (p.totalCulSec > 0) parts.push(p.totalCulSec + ' 🍻');
+    return parts.length > 0 ? parts.join(' + ') : '0';
 }
 
 function showMyResult() {
@@ -729,7 +782,9 @@ function showMyResult() {
     } else if (me.status === 'lost' || me.status === 'bust') {
         icon = '😅';
         title = me.status === 'bust' ? 'Brûlé !' : 'Perdu...';
-        drinkText = bet.type === 'culsec' ? '🍺 CUL SEC !' : bet.type === 'demi' ? '½ CUL SEC !' : '+' + bet.amount + ' gorgées';
+        if (bet.type === 'culsec') drinkText = '🍻 CUL SEC !';
+        else if (bet.type === 'demi') drinkText = '½ CUL SEC !';
+        else drinkText = '+' + bet.amount + ' gorgées';
     } else {
         icon = '🤝';
         title = 'Égalité !';

@@ -473,7 +473,15 @@ function updateGame() {
         document.getElementById('my-name').textContent = me.name;
         
         var bet = JSON.parse(me.bet || '{"amount":2,"type":"normal"}');
-        document.getElementById('my-bet').textContent = bet.type === 'culsec' ? '🍺 Cul sec' : bet.type === 'demi' ? '½ cul sec' : bet.amount + ' gorgées';
+        var betText = '';
+        if (bet.type === 'culsec') {
+            betText = bet.doubled ? '🍺🍺 2 Cul sec' : '🍺 Cul sec';
+        } else if (bet.type === 'demi') {
+            betText = '½ cul sec';
+        } else {
+            betText = bet.amount + ' gorgées';
+        }
+        document.getElementById('my-bet').textContent = betText;
         
         // Afficher toutes les mains
         var hands = JSON.parse(me.hands || '[[]]');
@@ -659,14 +667,23 @@ function playerDouble() {
     var me = localState.players[myId];
     var hands = JSON.parse(me.hands || '[[]]');
     var activeHand = me.activeHand || 0;
-    var bet = JSON.parse(me.bet || '{"amount":2}');
+    var bet = JSON.parse(me.bet || '{"amount":2,"type":"normal"}');
     
     if (hands[activeHand].length !== 2) {
         toast('Double uniquement avec 2 cartes !', 'error');
         return;
     }
     
-    bet.amount *= 2;
+    // Doubler la mise selon le type
+    if (bet.type === 'demi') {
+        bet.type = 'culsec'; // demi → cul sec entier
+    } else if (bet.type === 'culsec') {
+        bet.type = 'culsec';
+        bet.doubled = true; // 2 cul sec
+    } else {
+        bet.amount *= 2;
+    }
+    
     hands[activeHand].push(deck.pop());
     
     var updates = {
@@ -844,6 +861,9 @@ function calculateResults(dealerHand) {
         var handResults = [];
         var wonCount = 0, lostCount = 0;
         
+        // Multiplicateur pour cul sec doublé
+        var culSecMultiplier = bet.doubled ? 2 : 1;
+        
         // Évaluer chaque main séparément
         hands.forEach(function(hand) {
             var score = calcScore(hand);
@@ -853,19 +873,19 @@ function calculateResults(dealerHand) {
             if (bust) {
                 result = 'lost';
                 lostCount++;
-                if (bet.type === 'culsec') addCulSec++;
+                if (bet.type === 'culsec') addCulSec += culSecMultiplier;
                 else if (bet.type === 'demi') addDemi++;
                 else addGorgees += bet.amount;
             } else if (dealerBust || score > dealerScore) {
                 result = 'won';
                 wonCount++;
-                if (bet.type === 'culsec') dealerCulSec++;
+                if (bet.type === 'culsec') dealerCulSec += culSecMultiplier;
                 else if (bet.type === 'demi') dealerDemi++;
                 else dealerGorgees += bet.amount;
             } else if (score < dealerScore) {
                 result = 'lost';
                 lostCount++;
-                if (bet.type === 'culsec') addCulSec++;
+                if (bet.type === 'culsec') addCulSec += culSecMultiplier;
                 else if (bet.type === 'demi') addDemi++;
                 else addGorgees += bet.amount;
             }
@@ -938,10 +958,20 @@ function updateResults() {
 }
 
 function formatDrinks(p) {
+    var gorgees = p.totalGorgees || 0;
+    var demi = p.totalDemi || 0;
+    var culSec = p.totalCulSec || 0;
+    
+    // Convertir 2 demi en 1 cul sec
+    while (demi >= 2) {
+        demi -= 2;
+        culSec += 1;
+    }
+    
     var parts = [];
-    if (p.totalGorgees > 0) parts.push(p.totalGorgees + ' 🍺');
-    if (p.totalDemi > 0) parts.push(p.totalDemi + ' ½');
-    if (p.totalCulSec > 0) parts.push(p.totalCulSec + ' 🍻');
+    if (gorgees > 0) parts.push(gorgees + ' 🍺');
+    if (demi > 0) parts.push(demi + ' ½');
+    if (culSec > 0) parts.push(culSec + ' 🍻');
     return parts.length > 0 ? parts.join(' + ') : '0';
 }
 
@@ -960,9 +990,17 @@ function showMyResult() {
     var lostCount = handResults.filter(function(r) { return r === 'lost'; }).length;
     var totalHands = hands.length;
     
-    // Calculer les gorgées perdues
+    // Multiplicateur pour cul sec doublé
+    var culSecMultiplier = bet.doubled ? 2 : 1;
+    
+    // Calculer les pénalités
     var gorgeesLost = 0;
-    if (bet.type === 'normal') gorgeesLost = lostCount * bet.amount;
+    var culSecLost = 0;
+    var demiLost = 0;
+    
+    if (bet.type === 'culsec') culSecLost = lostCount * culSecMultiplier;
+    else if (bet.type === 'demi') demiLost = lostCount;
+    else gorgeesLost = lostCount * bet.amount;
     
     if (me.status === 'won') {
         icon = '🎉';
@@ -972,14 +1010,14 @@ function showMyResult() {
     } else if (me.status === 'mixed') {
         icon = '😬';
         title = 'Mix : ' + wonCount + ' gagné, ' + lostCount + ' perdu';
-        if (bet.type === 'culsec') drinkText = lostCount + ' 🍻 CUL SEC !';
-        else if (bet.type === 'demi') drinkText = lostCount + ' ½ CUL SEC !';
+        if (bet.type === 'culsec') drinkText = culSecLost + ' 🍻 CUL SEC !';
+        else if (bet.type === 'demi') drinkText = demiLost + ' ½ CUL SEC !';
         else drinkText = '+' + gorgeesLost + ' gorgées';
     } else if (me.status === 'lost') {
         icon = '😅';
         title = totalHands > 1 ? 'Perdu ' + lostCount + '/' + totalHands + ' mains...' : 'Perdu...';
-        if (bet.type === 'culsec') drinkText = lostCount + ' 🍻 CUL SEC !';
-        else if (bet.type === 'demi') drinkText = lostCount + ' ½ CUL SEC !';
+        if (bet.type === 'culsec') drinkText = culSecLost + ' 🍻 CUL SEC !';
+        else if (bet.type === 'demi') drinkText = demiLost + ' ½ CUL SEC !';
         else drinkText = '+' + gorgeesLost + ' gorgées';
     } else {
         icon = '🤝';

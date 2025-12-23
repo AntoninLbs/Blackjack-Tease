@@ -415,8 +415,10 @@ function startDealing() {
     var updates = {};
     
     order.forEach(function(id) {
-        var hand = [deck.pop(), deck.pop()];
-        updates['players/' + id + '/hand'] = JSON.stringify(hand);
+        var hands = [[deck.pop(), deck.pop()]]; // Tableau de mains, commence avec 1 main
+        updates['players/' + id + '/hands'] = JSON.stringify(hands);
+        updates['players/' + id + '/activeHand'] = 0;
+        updates['players/' + id + '/handResults'] = '[]'; // Résultats par main
         updates['players/' + id + '/status'] = 'playing';
     });
     
@@ -473,35 +475,56 @@ function updateGame() {
         var bet = JSON.parse(me.bet || '{"amount":2,"type":"normal"}');
         document.getElementById('my-bet').textContent = bet.type === 'culsec' ? '🍺 Cul sec' : bet.type === 'demi' ? '½ cul sec' : bet.amount + ' gorgées';
         
-        var myHand = JSON.parse(me.hand || '[]');
-        document.getElementById('my-cards').innerHTML = myHand.map(function(c) { return renderCard(c); }).join('');
-        document.getElementById('my-score').textContent = calcScore(myHand);
+        // Afficher toutes les mains
+        var hands = JSON.parse(me.hands || '[[]]');
+        var activeHand = me.activeHand || 0;
+        
+        var handsHtml = hands.map(function(hand, idx) {
+            var isActive = idx === activeHand && isMyTurn;
+            var score = calcScore(hand);
+            var isBust = score > 21;
+            return '<div class="hand-container ' + (isActive ? 'active-hand' : '') + ' ' + (isBust ? 'bust-hand' : '') + '">' +
+                (hands.length > 1 ? '<div class="hand-label">Main ' + (idx + 1) + '</div>' : '') +
+                '<div class="cards-row">' + hand.map(function(c) { return renderCard(c); }).join('') + '</div>' +
+                '<div class="score-badge ' + (isBust ? 'bust' : '') + '">' + score + (isBust ? ' 💥' : '') + '</div>' +
+            '</div>';
+        }).join('');
+        
+        document.getElementById('my-cards').innerHTML = handsHtml;
+        document.getElementById('my-score').style.display = 'none'; // Caché car inclus dans chaque main
         
         myGame.className = 'my-game';
         if (isMyTurn) myGame.classList.add('active');
-        if (me.status === 'won') myGame.classList.add('won');
-        if (me.status === 'lost' || me.status === 'bust') myGame.classList.add('lost');
     }
     
     var actionsBar = document.getElementById('actions-bar');
     var gameWaiting = document.getElementById('game-waiting');
     
     // Actions pour le joueur normal
-    if (isMyTurn && !gameEnded && !isDealerTurn && !isReveal) {
+    if (isMyTurn && !gameEnded && !isDealerTurn && !isReveal && me) {
+        var hands = JSON.parse(me.hands || '[[]]');
+        var activeHand = me.activeHand || 0;
+        var currentHand = hands[activeHand] || [];
+        var canDbl = currentHand.length === 2;
+        var canSplt = canSplit();
+        
         actionsBar.style.display = 'grid';
         actionsBar.innerHTML = '<button class="btn btn-success" onclick="playerHit()">🃏 Carte</button>' +
             '<button class="btn btn-secondary" onclick="playerStand()">✋ Stop</button>' +
-            '<button class="btn btn-accent" onclick="playerDouble()" id="btn-double">💰 Doubler</button>' +
-            '<button class="btn" onclick="playerSplit()" id="btn-split" style="display:none;">✂️ Split</button>';
-        var myHand2 = JSON.parse(me ? me.hand || '[]' : '[]');
-        document.getElementById('btn-double').style.display = myHand2.length === 2 ? 'block' : 'none';
+            (canDbl ? '<button class="btn btn-accent" onclick="playerDouble()">💰 Doubler</button>' : '') +
+            (canSplt ? '<button class="btn" onclick="playerSplit()">✂️ Split</button>' : '');
         gameWaiting.style.display = 'none';
     }
     // Actions pour le dealer (banque)
     else if (isDealerTurn && amIDealer) {
+        var dealerScore = calcScore(dealerHand);
         actionsBar.style.display = 'grid';
-        actionsBar.innerHTML = '<button class="btn btn-success" onclick="dealerHit()">🃏 Tirer</button>' +
-            '<button class="btn btn-secondary" onclick="dealerStand()">✋ Rester</button>';
+        if (dealerScore >= 17) {
+            actionsBar.innerHTML = '<button class="btn btn-secondary" onclick="dealerStand()" style="grid-column: span 2;">✋ Rester (' + dealerScore + ')</button>';
+        } else {
+            actionsBar.innerHTML = '<button class="btn btn-success" onclick="dealerHit()">🃏 Tirer</button>' +
+                '<button class="btn btn-secondary" disabled>✋ Reste (min 17)</button>';
+        }
         gameWaiting.style.display = 'none';
     }
     // Phase reveal - host valide
@@ -530,17 +553,25 @@ function updateGame() {
     }).filter(function(p) { return p; });
     
     document.getElementById('other-players').innerHTML = others.map(function(p) {
-        var hand = JSON.parse(p.hand || '[]');
+        var hands = JSON.parse(p.hands || '[[]]');
         var cls = p.id === currentPlayer ? 'active' : '';
-        if (p.status === 'won') cls = 'won';
-        if (p.status === 'lost' || p.status === 'bust') cls = 'lost';
+        
+        var handsHtml = hands.map(function(hand, idx) {
+            var score = calcScore(hand);
+            var isBust = score > 21;
+            return '<div class="other-hand">' +
+                (hands.length > 1 ? '<div style="font-size:0.6rem;color:var(--text-muted);">M' + (idx+1) + '</div>' : '') +
+                '<div class="mini-cards">' + hand.map(function(c) { 
+                    return '<div class="mini-card" style="color:' + (['♥','♦'].indexOf(c.suit) >= 0 ? '#e63946' : '#1d3557') + '">' + c.value + '</div>'; 
+                }).join('') + '</div>' +
+                '<div style="font-weight:600;' + (isBust ? 'color:var(--primary);' : '') + '">' + score + '</div>' +
+            '</div>';
+        }).join('');
+        
         return '<div class="other-player ' + cls + '">' +
             '<div class="avatar">' + p.emoji + '</div>' +
             '<div>' + p.name + '</div>' +
-            '<div class="mini-cards">' + hand.map(function(c) { 
-                return '<div class="mini-card" style="color:' + (['♥','♦'].indexOf(c.suit) >= 0 ? '#e63946' : '#1d3557') + '">' + c.value + '</div>'; 
-            }).join('') + '</div>' +
-            '<div style="font-weight:600;">' + calcScore(hand) + '</div>' +
+            handsHtml +
         '</div>';
     }).join('');
 }
@@ -571,30 +602,47 @@ function calcScore(hand) {
 }
 
 // ========== PLAYER ACTIONS ==========
+function getMyHands() {
+    var me = localState.players ? localState.players[myId] : null;
+    if (!me) return { hands: [[]], activeHand: 0 };
+    var hands = JSON.parse(me.hands || '[[]]');
+    var activeHand = me.activeHand || 0;
+    return { hands: hands, activeHand: activeHand };
+}
+
+function canSplit() {
+    var data = getMyHands();
+    var hand = data.hands[data.activeHand];
+    if (!hand || hand.length !== 2) return false;
+    // Même carte exacte (deux 10, deux Rois, deux As, etc.)
+    return hand[0].value === hand[1].value;
+}
+
 function playerHit() {
     var deck = JSON.parse(localState.deck || '[]');
     var me = localState.players[myId];
-    var hand = JSON.parse(me ? me.hand || '[]' : '[]');
+    var hands = JSON.parse(me.hands || '[[]]');
+    var activeHand = me.activeHand || 0;
     
-    hand.push(deck.pop());
-    var score = calcScore(hand);
+    hands[activeHand].push(deck.pop());
+    var score = calcScore(hands[activeHand]);
     
     var updates = {
         deck: JSON.stringify(deck),
         updated: Date.now()
     };
-    updates['players/' + myId + '/hand'] = JSON.stringify(hand);
+    updates['players/' + myId + '/hands'] = JSON.stringify(hands);
     
     if (score > 21) {
-        updates['players/' + myId + '/status'] = 'bust';
+        // Main brûlée, passer à la suivante ou terminer
+        toast('Brûlé ! 💥', 'error');
         gameRef.update(updates).then(function() {
-            toast('Brûlé ! 💥', 'error');
-            setTimeout(signalNext, 800);
+            setTimeout(function() { moveToNextHand(); }, 500);
         });
     } else if (score === 21) {
+        toast('21 ! 🎯', 'success');
         gameRef.update(updates).then(function() {
-            toast('21 ! 🎯', 'success');
-            setTimeout(signalNext, 500);
+            setTimeout(function() { moveToNextHand(); }, 500);
         });
     } else {
         gameRef.update(updates);
@@ -603,35 +651,83 @@ function playerHit() {
 
 function playerStand() {
     toast('Tu restes', 'info');
-    signalNext();
+    moveToNextHand();
 }
 
 function playerDouble() {
     var deck = JSON.parse(localState.deck || '[]');
     var me = localState.players[myId];
-    var hand = JSON.parse(me ? me.hand || '[]' : '[]');
-    var bet = JSON.parse(me ? me.bet || '{"amount":2}' : '{"amount":2}');
+    var hands = JSON.parse(me.hands || '[[]]');
+    var activeHand = me.activeHand || 0;
+    var bet = JSON.parse(me.bet || '{"amount":2}');
+    
+    if (hands[activeHand].length !== 2) {
+        toast('Double uniquement avec 2 cartes !', 'error');
+        return;
+    }
     
     bet.amount *= 2;
-    hand.push(deck.pop());
-    var score = calcScore(hand);
+    hands[activeHand].push(deck.pop());
     
     var updates = {
         deck: JSON.stringify(deck),
         updated: Date.now()
     };
-    updates['players/' + myId + '/hand'] = JSON.stringify(hand);
+    updates['players/' + myId + '/hands'] = JSON.stringify(hands);
     updates['players/' + myId + '/bet'] = JSON.stringify(bet);
-    updates['players/' + myId + '/status'] = score > 21 ? 'bust' : 'playing';
     
+    toast('Doublé ! 💰', 'info');
     gameRef.update(updates).then(function() {
-        toast('Doublé ! 💰', 'info');
-        setTimeout(signalNext, 800);
+        setTimeout(function() { moveToNextHand(); }, 500);
     });
 }
 
 function playerSplit() {
-    toast('Split pas encore dispo !', 'info');
+    if (!canSplit()) {
+        toast('Split impossible !', 'error');
+        return;
+    }
+    
+    var deck = JSON.parse(localState.deck || '[]');
+    var me = localState.players[myId];
+    var hands = JSON.parse(me.hands || '[[]]');
+    var activeHand = me.activeHand || 0;
+    
+    // Séparer les 2 cartes
+    var card1 = hands[activeHand][0];
+    var card2 = hands[activeHand][1];
+    
+    // La main active garde la 1ère carte + tire une nouvelle
+    hands[activeHand] = [card1, deck.pop()];
+    
+    // Nouvelle main avec la 2e carte + tire une nouvelle
+    hands.push([card2, deck.pop()]);
+    
+    var updates = {
+        deck: JSON.stringify(deck),
+        updated: Date.now()
+    };
+    updates['players/' + myId + '/hands'] = JSON.stringify(hands);
+    
+    toast('Split ! ✂️ Tu as ' + hands.length + ' mains', 'success');
+    gameRef.update(updates);
+}
+
+function moveToNextHand() {
+    var me = localState.players[myId];
+    var hands = JSON.parse(me.hands || '[[]]');
+    var activeHand = me.activeHand || 0;
+    
+    if (activeHand < hands.length - 1) {
+        // Passer à la main suivante
+        playersRef.child(myId).update({ 
+            activeHand: activeHand + 1 
+        });
+        toast('Main ' + (activeHand + 2) + '/' + hands.length, 'info');
+    } else {
+        // Toutes les mains jouées, passer au joueur suivant
+        signalNext();
+    }
 }
 
 function signalNext() {
@@ -656,10 +752,10 @@ function moveNext() {
 // Host: surveiller les signaux des joueurs
 setInterval(function() {
     if (!isHost || !localState || localState.status !== 'playing') return;
-    if (!localState.currentPlayer || localState.currentPlayer === 'dealer' || localState.currentPlayer === 'done') return;
+    if (!localState.currentPlayer || localState.currentPlayer === 'dealer' || localState.currentPlayer === 'done' || localState.currentPlayer === 'reveal') return;
     
     var player = localState.players ? localState.players[localState.currentPlayer] : null;
-    if (player && (player.status === 'bust' || player.actionDone)) {
+    if (player && player.actionDone) {
         moveNext();
     }
 }, 500);
@@ -669,11 +765,18 @@ function dealerHit() {
     var amIDealer = localState.dealer === myId;
     if (!amIDealer) return;
     
-    var deck = JSON.parse(localState.deck || '[]');
     var dealerHand = JSON.parse(localState.dealerHand || '[]');
-    
-    dealerHand.push(deck.pop());
     var score = calcScore(dealerHand);
+    
+    // Bloqué à 17+
+    if (score >= 17) {
+        toast('Tu dois rester à ' + score + ' !', 'error');
+        return;
+    }
+    
+    var deck = JSON.parse(localState.deck || '[]');
+    dealerHand.push(deck.pop());
+    score = calcScore(dealerHand);
     
     var updates = {
         deck: JSON.stringify(deck),
@@ -686,10 +789,11 @@ function dealerHit() {
         gameRef.update(updates).then(function() {
             toast('Banque brûlée ! 💥', 'error');
         });
-    } else if (score === 21) {
+    } else if (score >= 17) {
+        // Auto-reste à 17+
         updates['currentPlayer'] = 'reveal';
         gameRef.update(updates).then(function() {
-            toast('Banque à 21 ! 🎯', 'success');
+            toast('Banque à ' + score + ', tu dois rester', 'info');
         });
     } else {
         gameRef.update(updates);
@@ -700,11 +804,19 @@ function dealerStand() {
     var amIDealer = localState.dealer === myId;
     if (!amIDealer) return;
     
+    var dealerHand = JSON.parse(localState.dealerHand || '[]');
+    var score = calcScore(dealerHand);
+    
+    if (score < 17) {
+        toast('Tu dois tirer jusqu\'à 17 minimum !', 'error');
+        return;
+    }
+    
     gameRef.update({
         currentPlayer: 'reveal',
         updated: Date.now()
     });
-    toast('Banque reste', 'info');
+    toast('Banque reste à ' + score, 'info');
 }
 
 function hostValidateResults() {
@@ -725,32 +837,50 @@ function calculateResults(dealerHand) {
     
     order.forEach(function(id) {
         var p = localState.players[id];
-        var hand = JSON.parse(p.hand || '[]');
-        var score = calcScore(hand);
+        var hands = JSON.parse(p.hands || '[[]]');
         var bet = JSON.parse(p.bet || '{"amount":2,"type":"normal"}');
-        var bust = p.status === 'bust' || score > 21;
         
-        var status = 'push';
         var addGorgees = 0, addDemi = 0, addCulSec = 0;
+        var handResults = [];
+        var wonCount = 0, lostCount = 0;
         
-        if (bust) {
-            status = 'lost';
-            if (bet.type === 'culsec') addCulSec = 1;
-            else if (bet.type === 'demi') addDemi = 1;
-            else addGorgees = bet.amount;
-        } else if (dealerBust || score > dealerScore) {
-            status = 'won';
-            if (bet.type === 'culsec') dealerCulSec += 1;
-            else if (bet.type === 'demi') dealerDemi += 1;
-            else dealerGorgees += bet.amount;
-        } else if (score < dealerScore) {
-            status = 'lost';
-            if (bet.type === 'culsec') addCulSec = 1;
-            else if (bet.type === 'demi') addDemi = 1;
-            else addGorgees = bet.amount;
-        }
+        // Évaluer chaque main séparément
+        hands.forEach(function(hand) {
+            var score = calcScore(hand);
+            var bust = score > 21;
+            var result = 'push';
+            
+            if (bust) {
+                result = 'lost';
+                lostCount++;
+                if (bet.type === 'culsec') addCulSec++;
+                else if (bet.type === 'demi') addDemi++;
+                else addGorgees += bet.amount;
+            } else if (dealerBust || score > dealerScore) {
+                result = 'won';
+                wonCount++;
+                if (bet.type === 'culsec') dealerCulSec++;
+                else if (bet.type === 'demi') dealerDemi++;
+                else dealerGorgees += bet.amount;
+            } else if (score < dealerScore) {
+                result = 'lost';
+                lostCount++;
+                if (bet.type === 'culsec') addCulSec++;
+                else if (bet.type === 'demi') addDemi++;
+                else addGorgees += bet.amount;
+            }
+            
+            handResults.push(result);
+        });
+        
+        // Status global : si au moins une main gagnée = won, sinon si tout perdu = lost, sinon push
+        var status = 'push';
+        if (wonCount > 0 && lostCount === 0) status = 'won';
+        else if (lostCount > 0 && wonCount === 0) status = 'lost';
+        else if (wonCount > 0 && lostCount > 0) status = 'mixed';
         
         updates['players/' + id + '/status'] = status;
+        updates['players/' + id + '/handResults'] = JSON.stringify(handResults);
         updates['players/' + id + '/totalGorgees'] = (p.totalGorgees || 0) + addGorgees;
         updates['players/' + id + '/totalDemi'] = (p.totalDemi || 0) + addDemi;
         updates['players/' + id + '/totalCulSec'] = (p.totalCulSec || 0) + addCulSec;
@@ -819,23 +949,38 @@ function showMyResult() {
     var me = localState.players ? localState.players[myId] : null;
     if (!me || me.id === localState.dealer) return;
     
-    var hand = JSON.parse(me.hand || '[]');
-    var score = calcScore(hand);
+    var hands = JSON.parse(me.hands || '[[]]');
+    var handResults = JSON.parse(me.handResults || '[]');
     var bet = JSON.parse(me.bet || '{}');
     
     var icon, title, drinkText, drinkClass = '';
     
+    // Compter les résultats
+    var wonCount = handResults.filter(function(r) { return r === 'won'; }).length;
+    var lostCount = handResults.filter(function(r) { return r === 'lost'; }).length;
+    var totalHands = hands.length;
+    
+    // Calculer les gorgées perdues
+    var gorgeesLost = 0;
+    if (bet.type === 'normal') gorgeesLost = lostCount * bet.amount;
+    
     if (me.status === 'won') {
         icon = '🎉';
-        title = 'Tu as gagné !';
+        title = totalHands > 1 ? 'Tu as gagné ' + wonCount + '/' + totalHands + ' mains !' : 'Tu as gagné !';
         drinkText = 'Safe !';
         drinkClass = 'safe';
-    } else if (me.status === 'lost' || me.status === 'bust') {
+    } else if (me.status === 'mixed') {
+        icon = '😬';
+        title = 'Mix : ' + wonCount + ' gagné, ' + lostCount + ' perdu';
+        if (bet.type === 'culsec') drinkText = lostCount + ' 🍻 CUL SEC !';
+        else if (bet.type === 'demi') drinkText = lostCount + ' ½ CUL SEC !';
+        else drinkText = '+' + gorgeesLost + ' gorgées';
+    } else if (me.status === 'lost') {
         icon = '😅';
-        title = me.status === 'bust' ? 'Brûlé !' : 'Perdu...';
-        if (bet.type === 'culsec') drinkText = '🍻 CUL SEC !';
-        else if (bet.type === 'demi') drinkText = '½ CUL SEC !';
-        else drinkText = '+' + bet.amount + ' gorgées';
+        title = totalHands > 1 ? 'Perdu ' + lostCount + '/' + totalHands + ' mains...' : 'Perdu...';
+        if (bet.type === 'culsec') drinkText = lostCount + ' 🍻 CUL SEC !';
+        else if (bet.type === 'demi') drinkText = lostCount + ' ½ CUL SEC !';
+        else drinkText = '+' + gorgeesLost + ' gorgées';
     } else {
         icon = '🤝';
         title = 'Égalité !';
@@ -843,9 +988,14 @@ function showMyResult() {
         drinkClass = 'safe';
     }
     
+    // Résumé des scores de chaque main
+    var scoresText = hands.map(function(hand, i) {
+        return 'M' + (i+1) + ': ' + calcScore(hand);
+    }).join(' | ');
+    
     document.getElementById('result-icon').textContent = icon;
     document.getElementById('result-title').textContent = title;
-    document.getElementById('result-subtitle').textContent = 'Score: ' + score;
+    document.getElementById('result-subtitle').textContent = totalHands > 1 ? scoresText : 'Score: ' + calcScore(hands[0]);
     document.getElementById('result-drinks').textContent = drinkText;
     document.getElementById('result-drinks').className = 'result-drinks ' + drinkClass;
     document.getElementById('result-overlay').style.display = 'flex';
@@ -887,7 +1037,9 @@ function nextRound() {
     };
     
     newOrder.concat([newDealer]).forEach(function(id) {
-        updates['players/' + id + '/hand'] = '';
+        updates['players/' + id + '/hands'] = '';
+        updates['players/' + id + '/activeHand'] = 0;
+        updates['players/' + id + '/handResults'] = '';
         updates['players/' + id + '/bet'] = '';
         updates['players/' + id + '/status'] = 'waiting';
         updates['players/' + id + '/actionDone'] = null;

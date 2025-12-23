@@ -91,6 +91,14 @@ body { font-family: 'Fredoka', sans-serif; background: var(--bg); color: var(--t
 .my-game-name { font-weight: 600; display: flex; align-items: center; gap: 0.4rem; }
 .my-game-bet { color: var(--accent); font-size: 0.8rem; }
 
+.hand-container { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 0.5rem; margin-bottom: 0.5rem; border: 2px solid transparent; }
+.hand-container.active-hand { border-color: var(--accent); box-shadow: 0 0 10px rgba(244, 162, 97, 0.3); }
+.hand-container.bust-hand { border-color: var(--primary); opacity: 0.7; }
+.hand-label { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+.score-badge.bust { background: var(--primary); }
+
+.other-hand { margin-top: 0.25rem; }
+
 .other-players { display: flex; gap: 0.4rem; overflow-x: auto; padding: 0.5rem 0; margin-top: 0.5rem; }
 .other-player { flex-shrink: 0; background: rgba(0,0,0,0.3); border-radius: 10px; padding: 0.5rem; min-width: 90px; text-align: center; font-size: 0.75rem; border: 2px solid transparent; }
 .other-player.active { border-color: var(--accent); }

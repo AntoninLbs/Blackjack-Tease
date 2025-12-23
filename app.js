@@ -441,6 +441,8 @@ function updateGame() {
     var currentPlayer = localState.currentPlayer;
     var isMyTurn = currentPlayer === myId;
     var amIDealer = localState.dealer === myId;
+    var isDealerTurn = currentPlayer === 'dealer';
+    var isReveal = currentPlayer === 'reveal';
     var gameEnded = currentPlayer === 'done';
     
     document.getElementById('game-deck-count').textContent = deck.length;
@@ -449,7 +451,7 @@ function updateGame() {
     var dealer = localState.players ? localState.players[localState.dealer] : null;
     document.getElementById('game-dealer-name').textContent = (dealer ? dealer.emoji : '?') + ' ' + (dealer ? dealer.name : '???');
     
-    var dealerRevealed = currentPlayer === 'dealer' || gameEnded;
+    var dealerRevealed = isDealerTurn || isReveal || gameEnded;
     
     document.getElementById('dealer-cards').innerHTML = dealerHand.map(function(c, i) {
         if (i === 1 && !dealerRevealed) return '<div class="card hidden"></div>';
@@ -484,16 +486,42 @@ function updateGame() {
     var actionsBar = document.getElementById('actions-bar');
     var gameWaiting = document.getElementById('game-waiting');
     
-    if (isMyTurn && !gameEnded) {
+    // Actions pour le joueur normal
+    if (isMyTurn && !gameEnded && !isDealerTurn && !isReveal) {
         actionsBar.style.display = 'grid';
-        gameWaiting.style.display = 'none';
+        actionsBar.innerHTML = '<button class="btn btn-success" onclick="playerHit()">🃏 Carte</button>' +
+            '<button class="btn btn-secondary" onclick="playerStand()">✋ Stop</button>' +
+            '<button class="btn btn-accent" onclick="playerDouble()" id="btn-double">💰 Doubler</button>' +
+            '<button class="btn" onclick="playerSplit()" id="btn-split" style="display:none;">✂️ Split</button>';
         var myHand2 = JSON.parse(me ? me.hand || '[]' : '[]');
         document.getElementById('btn-double').style.display = myHand2.length === 2 ? 'block' : 'none';
-    } else {
+        gameWaiting.style.display = 'none';
+    }
+    // Actions pour le dealer (banque)
+    else if (isDealerTurn && amIDealer) {
+        actionsBar.style.display = 'grid';
+        actionsBar.innerHTML = '<button class="btn btn-success" onclick="dealerHit()">🃏 Tirer</button>' +
+            '<button class="btn btn-secondary" onclick="dealerStand()">✋ Rester</button>';
+        gameWaiting.style.display = 'none';
+    }
+    // Phase reveal - host valide
+    else if (isReveal && isHost) {
+        actionsBar.style.display = 'grid';
+        actionsBar.innerHTML = '<button class="btn btn-success" onclick="hostValidateResults()" style="grid-column: span 2;">✅ Voir les résultats</button>';
+        gameWaiting.style.display = 'none';
+    }
+    // Attente
+    else {
         actionsBar.style.display = 'none';
         gameWaiting.style.display = gameEnded ? 'none' : 'block';
-        var waitingP = localState.players ? localState.players[currentPlayer] : null;
-        document.getElementById('waiting-player').textContent = currentPlayer === 'dealer' ? 'le croupier' : (waitingP ? waitingP.name : '???');
+        if (isDealerTurn) {
+            document.getElementById('waiting-player').textContent = (dealer ? dealer.name : '???') + ' (Banque)';
+        } else if (isReveal) {
+            document.getElementById('waiting-player').textContent = 'validation...';
+        } else {
+            var waitingP = localState.players ? localState.players[currentPlayer] : null;
+            document.getElementById('waiting-player').textContent = waitingP ? waitingP.name : '???';
+        }
     }
     
     // Other players
@@ -622,7 +650,6 @@ function moveNext() {
         gameRef.update({ currentPlayer: order[idx + 1], updated: Date.now() });
     } else {
         gameRef.update({ currentPlayer: 'dealer', updated: Date.now() });
-        setTimeout(dealerPlay, 500);
     }
 }
 
@@ -637,29 +664,53 @@ setInterval(function() {
     }
 }, 500);
 
-function dealerPlay() {
-    if (!isHost) return;
+// ========== DEALER MANUAL PLAY ==========
+function dealerHit() {
+    var amIDealer = localState.dealer === myId;
+    if (!amIDealer) return;
     
     var deck = JSON.parse(localState.deck || '[]');
     var dealerHand = JSON.parse(localState.dealerHand || '[]');
     
-    function draw() {
-        var score = calcScore(dealerHand);
-        if (score < 17) {
-            dealerHand.push(deck.pop());
-            gameRef.update({
-                deck: JSON.stringify(deck),
-                dealerHand: JSON.stringify(dealerHand),
-                updated: Date.now()
-            }).then(function() {
-                setTimeout(draw, 800);
-            });
-        } else {
-            calculateResults(dealerHand);
-        }
-    }
+    dealerHand.push(deck.pop());
+    var score = calcScore(dealerHand);
     
-    setTimeout(draw, 800);
+    var updates = {
+        deck: JSON.stringify(deck),
+        dealerHand: JSON.stringify(dealerHand),
+        updated: Date.now()
+    };
+    
+    if (score > 21) {
+        updates['currentPlayer'] = 'reveal';
+        gameRef.update(updates).then(function() {
+            toast('Banque brûlée ! 💥', 'error');
+        });
+    } else if (score === 21) {
+        updates['currentPlayer'] = 'reveal';
+        gameRef.update(updates).then(function() {
+            toast('Banque à 21 ! 🎯', 'success');
+        });
+    } else {
+        gameRef.update(updates);
+    }
+}
+
+function dealerStand() {
+    var amIDealer = localState.dealer === myId;
+    if (!amIDealer) return;
+    
+    gameRef.update({
+        currentPlayer: 'reveal',
+        updated: Date.now()
+    });
+    toast('Banque reste', 'info');
+}
+
+function hostValidateResults() {
+    if (!isHost) return;
+    var dealerHand = JSON.parse(localState.dealerHand || '[]');
+    calculateResults(dealerHand);
 }
 
 function calculateResults(dealerHand) {

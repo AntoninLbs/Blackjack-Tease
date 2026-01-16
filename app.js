@@ -946,7 +946,24 @@ function moveNext() {
     if (idx < activeOrder.length - 1) {
         gameRef.update({ currentPlayer: activeOrder[idx + 1], updated: Date.now() });
     } else {
-        gameRef.update({ currentPlayer: 'dealer', updated: Date.now() });
+        // Vérifier si tous les joueurs ont bust
+        var allBust = activeOrder.every(function(id) {
+            var p = localState.players[id];
+            if (!p || p.status === 'spectating') return true;
+            var hands = JSON.parse(p.hands || '[[]]');
+            // Toutes les mains du joueur doivent être bust
+            return hands.every(function(hand) {
+                return calcScore(hand) > 21;
+            });
+        });
+        
+        if (allBust) {
+            // Tous bust → pas besoin de jouer la banque
+            toast('Tous les joueurs ont bust ! 💥', 'info');
+            gameRef.update({ currentPlayer: 'reveal', updated: Date.now() });
+        } else {
+            gameRef.update({ currentPlayer: 'dealer', updated: Date.now() });
+        }
     }
 }
 
@@ -1255,7 +1272,7 @@ function updateResults() {
             '<span class="rank">' + rank + '</span>' +
             '<span class="avatar">' + p.emoji + '</span>' +
             '<div class="info"><div class="name">' + p.name + (p.id===localState.dealer?' (Banque)':'') + '</div>' +
-            '<div class="total-score">' + totalScore + ' gorgées eq.</div></div>' +
+            '<div class="total-score">' + totalScore + ' gorgées</div></div>' +
             '<span class="drinks">' + drinks + '</span>' +
         '</div>';
     }).join('');

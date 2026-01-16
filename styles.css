@@ -17,9 +17,47 @@
 body { font-family: 'Fredoka', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; min-height: 100dvh; overflow-x: hidden; }
 
 .screen { display: none; min-height: 100vh; min-height: 100dvh; padding: 1rem; padding-bottom: 2rem; animation: fadeIn 0.4s ease; }
-.screen.active { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 2rem; }
+.screen.active { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 1rem; }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Top bar avec code et Exit */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-width: 500px;
+    margin-bottom: 0.5rem;
+    padding: 0 0.5rem;
+}
+
+.btn-exit {
+    background: var(--danger);
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.btn-exit:hover, .btn-exit:active {
+    background: #a71d2a;
+    transform: scale(1.05);
+}
+
+.game-room-code {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: monospace;
+    letter-spacing: 0.1em;
+    background: var(--card-bg);
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+}
 
 .logo { text-align: center; margin-bottom: 1.5rem; }
 .logo-icon { font-size: 3rem; animation: bounce 2s infinite; }
@@ -36,50 +74,6 @@ body { font-family: 'Fredoka', sans-serif; background: var(--bg); color: var(--t
 .btn-small { padding: 0.75rem 1.5rem; font-size: 0.95rem; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
 .btn-group { display: flex; flex-direction: column; gap: 1rem; width: 100%; max-width: 300px; }
-
-/* Bouton quitter petit */
-.btn-leave-small {
-    background: var(--danger);
-    border: none;
-    color: white;
-    padding: 0.4rem 0.6rem;
-    border-radius: 8px;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-.btn-leave-small:hover { transform: scale(1.1); }
-
-.btn-leave-game {
-    position: fixed;
-    bottom: 1rem;
-    right: 1rem;
-    width: auto;
-    max-width: none;
-    padding: 0.5rem 1rem;
-    font-size: 0.85rem;
-    z-index: 100;
-}
-
-/* Barre code de partie */
-.game-room-code-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    max-width: 400px;
-    padding: 0.5rem 1rem;
-    background: var(--card-bg);
-    border-radius: 10px;
-    margin-bottom: 1rem;
-}
-
-.game-room-code {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    font-family: monospace;
-    letter-spacing: 0.1em;
-}
 
 .input-group { width: 100%; max-width: 300px; margin-bottom: 1rem; }
 .input-group label { display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-weight: 500; font-size: 0.9rem; }
@@ -107,7 +101,23 @@ body { font-family: 'Fredoka', sans-serif; background: var(--bg); color: var(--t
 .waiting-text { text-align: center; color: var(--text-muted); font-size: 0.9rem; margin: 1rem 0; animation: pulse 2s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-.game-header { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 1rem; background: var(--card-bg); border-radius: 12px; margin-bottom: 0.75rem; font-size: 0.8rem; width: 100%; max-width: 500px; gap: 0.5rem; }
+.game-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 0.5rem 0.75rem; 
+    background: var(--card-bg); 
+    border-radius: 12px; 
+    margin-bottom: 0.75rem; 
+    font-size: 0.8rem; 
+    width: 100%; 
+    max-width: 500px; 
+    gap: 0.5rem; 
+}
+.game-header .btn-exit {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
+}
 
 .game-table { background: linear-gradient(180deg, #0f5132 0%, #0a3622 100%); border-radius: 20px; padding: 1rem; border: 4px solid #2d1810; box-shadow: inset 0 0 30px rgba(0,0,0,0.3); width: 100%; max-width: 500px; }
 

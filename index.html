@@ -6,7 +6,6 @@
     <title>Blackjack Tease 🃏</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🃏</text></svg>">
     
-    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     
@@ -48,6 +47,10 @@
     </div>
     
     <div class="screen" id="screen-lobby">
+        <div class="top-bar">
+            <span></span>
+            <button class="btn-exit" onclick="leaveGame()">Exit</button>
+        </div>
         <div class="logo"><div class="logo-icon">👥</div><h1>Salon</h1></div>
         <div class="room-code">
             <div class="room-code-label">Code de la partie</div>
@@ -57,14 +60,12 @@
         <div class="players-lobby" id="players-lobby"></div>
         <div class="waiting-text" id="waiting-text">En attente...</div>
         <button class="btn btn-success" id="btn-start-game" onclick="hostStartGame()" style="display: none;">🎲 Lancer !</button>
-        <button class="btn btn-danger btn-small" style="margin-top: 1rem;" onclick="leaveGame()">🚪 Quitter</button>
     </div>
     
     <div class="screen" id="screen-bet">
-        <!-- Code de partie en haut -->
-        <div class="game-room-code-bar">
-            <span class="game-room-code">Code: XXXX</span>
-            <button class="btn-leave-small" onclick="leaveGame()">🚪</button>
+        <div class="top-bar">
+            <span class="game-room-code">XXXX</span>
+            <button class="btn-exit" onclick="leaveGame()">Exit</button>
         </div>
         <div class="logo"><div class="logo-icon">🍺</div><h1>Ta mise</h1><p id="bet-dealer-info">Banquier: ???</p></div>
         <div class="bet-section">
@@ -76,9 +77,10 @@
     
     <div class="screen" id="screen-game">
         <div class="game-header">
-            <div>🃏 <span id="game-deck-count">52</span> cartes</div>
+            <div>🃏 <span id="game-deck-count">52</span></div>
             <div id="game-round-info">Tour 1</div>
-            <div class="game-room-code">Code: XXXX</div>
+            <div class="game-room-code">XXXX</div>
+            <button class="btn-exit" onclick="leaveGame()">Exit</button>
         </div>
         <div class="game-table">
             <div class="dealer-zone">
@@ -97,21 +99,14 @@
             </div>
             <div class="other-players" id="other-players"></div>
         </div>
-        <div class="actions-bar" id="actions-bar" style="display: none;">
-            <button class="btn btn-success" onclick="playerHit()">🃏 Carte</button>
-            <button class="btn btn-secondary" onclick="playerStand()">✋ Stop</button>
-            <button class="btn btn-accent" onclick="playerDouble()" id="btn-double">💰 Doubler</button>
-            <button class="btn" onclick="playerSplit()" id="btn-split" style="display:none;">✂️ Split</button>
-        </div>
+        <div class="actions-bar" id="actions-bar" style="display: none;"></div>
         <div class="waiting-text" id="game-waiting">En attente de <span id="waiting-player">???</span>...</div>
-        <button class="btn btn-danger btn-small btn-leave-game" onclick="leaveGame()">🚪 Quitter</button>
     </div>
     
     <div class="screen" id="screen-results">
-        <!-- Code de partie en haut -->
-        <div class="game-room-code-bar">
-            <span class="game-room-code">Code: XXXX</span>
-            <button class="btn-leave-small" onclick="leaveGame()">🚪</button>
+        <div class="top-bar">
+            <span class="game-room-code">XXXX</span>
+            <button class="btn-exit" onclick="leaveGame()">Exit</button>
         </div>
         <div class="logo"><h1 id="results-title">Résultats</h1></div>
         <div class="round-recap" id="round-recap"></div>

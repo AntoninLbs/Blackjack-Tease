@@ -18,6 +18,10 @@ const EMOJIS = ['😎', '🤠', '🥳', '😈', '🤩', '🧐', '🤪', '😏', 
 const SUITS = ['♠', '♥', '♦', '♣'];
 const VALUES = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
+// Valeurs pour le score général
+const GORGEES_PAR_DEMI = 7;
+const GORGEES_PAR_CULSEC = 15;
+
 // ========== STATE ==========
 let gameRef = null;
 let playersRef = null;
@@ -40,7 +44,67 @@ function init() {
         this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     });
     
+    // Tenter de reconnecter si session existante
+    tryReconnect();
+    
     console.log('✅ Firebase initialisé');
+}
+
+// ========== RECONNEXION AUTO ==========
+function tryReconnect() {
+    var savedRoom = localStorage.getItem('bjt_roomCode');
+    var savedName = localStorage.getItem('bjt_myName');
+    var savedEmoji = localStorage.getItem('bjt_myEmoji');
+    
+    if (savedRoom && savedName && savedEmoji) {
+        showLoading('Reconnexion...');
+        roomCode = savedRoom;
+        myName = savedName;
+        myEmoji = savedEmoji;
+        
+        gameRef = db.ref('games/' + roomCode);
+        playersRef = gameRef.child('players');
+        
+        // Vérifier si la partie existe encore
+        gameRef.once('value').then(function(snapshot) {
+            var data = snapshot.val();
+            
+            if (!data) {
+                // Partie n'existe plus
+                clearSession();
+                hideLoading();
+                return;
+            }
+            
+            // Vérifier si on est toujours dans la partie
+            if (data.players && data.players[myId]) {
+                isHost = data.host === myId;
+                subscribeToGame();
+                hideLoading();
+                toast('Reconnecté ! 🔄', 'success');
+            } else {
+                // Plus dans la partie
+                clearSession();
+                hideLoading();
+            }
+        }).catch(function() {
+            clearSession();
+            hideLoading();
+        });
+    }
+}
+
+function saveSession() {
+    localStorage.setItem('bjt_roomCode', roomCode);
+    localStorage.setItem('bjt_myName', myName);
+    localStorage.setItem('bjt_myEmoji', myEmoji);
+}
+
+function clearSession() {
+    localStorage.removeItem('bjt_roomCode');
+    localStorage.removeItem('bjt_myName');
+    localStorage.removeItem('bjt_myEmoji');
+    roomCode = '';
 }
 
 function generateRoomCode() {
@@ -62,6 +126,16 @@ function showScreen(id) {
     document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
     document.getElementById(id).classList.add('active');
     currentScreen = id;
+    
+    // Mettre à jour le code de partie affiché
+    updateRoomCodeDisplay();
+}
+
+function updateRoomCodeDisplay() {
+    var codeElements = document.querySelectorAll('.game-room-code');
+    codeElements.forEach(function(el) {
+        el.textContent = 'Code: ' + roomCode;
+    });
 }
 
 function toast(msg, type) {
@@ -108,6 +182,7 @@ function createRoom() {
         round: 0,
         deck: '',
         dealer: '',
+        lastDealer: '', // Pour tracker le dernier croupier
         dealerHand: '',
         currentPlayer: '',
         playerOrder: '',
@@ -126,9 +201,11 @@ function createRoom() {
             totalGorgees: 0,
             totalDemi: 0,
             totalCulSec: 0,
+            wasDealer: false, // A déjà été croupier ce paquet ?
             joined: ts
         });
     }).then(function() {
+        saveSession();
         subscribeToGame();
         hideLoading();
         document.getElementById('lobby-code').textContent = roomCode;
@@ -184,9 +261,11 @@ function joinRoom() {
             totalGorgees: 0,
             totalDemi: 0,
             totalCulSec: 0,
+            wasDealer: false,
             joined: Date.now()
         });
     }).then(function() {
+        saveSession();
         subscribeToGame();
         hideLoading();
         document.getElementById('lobby-code').textContent = roomCode;
@@ -203,12 +282,38 @@ function copyCode() {
     toast('Code copié !', 'success');
 }
 
+// ========== QUITTER LA PARTIE ==========
+function leaveGame() {
+    if (!confirm('Vraiment quitter la partie ?')) return;
+    
+    if (playersRef && myId) {
+        playersRef.child(myId).remove();
+    }
+    
+    clearSession();
+    if (gameRef) {
+        gameRef.off();
+    }
+    gameRef = null;
+    playersRef = null;
+    localState = { players: {} };
+    
+    showScreen('screen-home');
+    toast('Tu as quitté la partie', 'info');
+}
+
 // ========== SUBSCRIBE ==========
 function subscribeToGame() {
     // Écouter les changements du jeu
     gameRef.on('value', function(snapshot) {
         var data = snapshot.val();
-        if (!data) return;
+        if (!data) {
+            // Partie supprimée
+            clearSession();
+            showScreen('screen-home');
+            toast('La partie a été fermée', 'error');
+            return;
+        }
         
         // Mettre à jour localState (sauf players)
         Object.keys(data).forEach(function(k) {
@@ -279,16 +384,24 @@ function hostStartGame() {
     var randomDealer = players[Math.floor(Math.random() * players.length)].id;
     var order = players.filter(function(p) { return p.id !== randomDealer; }).map(function(p) { return p.id; });
     
-    gameRef.update({
+    var updates = {
         status: 'betting',
         deck: JSON.stringify(deck),
         dealer: randomDealer,
+        lastDealer: '',
         playerOrder: JSON.stringify(order),
         round: 1,
         dealerHand: '',
         currentPlayer: '',
         updated: Date.now()
-    }).then(function() {
+    };
+    
+    // Reset wasDealer pour tous
+    players.forEach(function(p) {
+        updates['players/' + p.id + '/wasDealer'] = (p.id === randomDealer);
+    });
+    
+    gameRef.update(updates).then(function() {
         hideLoading();
         toast('Partie lancée ! 🎲', 'success');
     });
@@ -354,10 +467,10 @@ function renderBetOptions() {
     '</div>' +
     '<div class="bet-specials">' +
         '<div class="bet-option demi ' + (selectedBet.type==='demi'?'selected':'') + '" onclick="selectBetType(\'demi\')">' +
-            '<span class="number">½</span><span class="label">cul sec</span>' +
+            '<span class="number">½</span><span class="label">cul sec (' + GORGEES_PAR_DEMI + 'g)</span>' +
         '</div>' +
         '<div class="bet-option special ' + (selectedBet.type==='culsec'?'selected':'') + '" onclick="selectBetType(\'culsec\')">' +
-            '<span class="number">🍺</span><span class="label">cul sec</span>' +
+            '<span class="number">🍺</span><span class="label">cul sec (' + GORGEES_PAR_CULSEC + 'g)</span>' +
         '</div>' +
     '</div>';
     document.getElementById('bet-options').innerHTML = html;
@@ -420,6 +533,7 @@ function startDealing() {
         updates['players/' + id + '/activeHand'] = 0;
         updates['players/' + id + '/handResults'] = '[]'; // Résultats par main
         updates['players/' + id + '/status'] = 'playing';
+        updates['players/' + id + '/doubledHidden'] = ''; // Pour cacher la carte doublée
     });
     
     var dealerHand = [deck.pop(), deck.pop()];
@@ -486,15 +600,28 @@ function updateGame() {
         // Afficher toutes les mains
         var hands = JSON.parse(me.hands || '[[]]');
         var activeHand = me.activeHand || 0;
+        var doubledHidden = JSON.parse(me.doubledHidden || '{}'); // {0: true, 1: false} par main
         
         var handsHtml = hands.map(function(hand, idx) {
             var isActive = idx === activeHand && isMyTurn;
             var score = calcScore(hand);
             var isBust = score > 21;
-            return '<div class="hand-container ' + (isActive ? 'active-hand' : '') + ' ' + (isBust ? 'bust-hand' : '') + '">' +
+            var isHidden = doubledHidden[idx] && !gameEnded && !isReveal;
+            
+            // Afficher les cartes (la dernière cachée si doublé et pas révélé)
+            var cardsHtml = hand.map(function(c, cardIdx) {
+                if (isHidden && cardIdx === hand.length - 1) {
+                    return '<div class="card hidden"></div>';
+                }
+                return renderCard(c);
+            }).join('');
+            
+            var displayScore = isHidden ? calcScore(hand.slice(0, -1)) + '?' : score;
+            
+            return '<div class="hand-container ' + (isActive ? 'active-hand' : '') + ' ' + (isBust && !isHidden ? 'bust-hand' : '') + '">' +
                 (hands.length > 1 ? '<div class="hand-label">Main ' + (idx + 1) + '</div>' : '') +
-                '<div class="cards-row">' + hand.map(function(c) { return renderCard(c); }).join('') + '</div>' +
-                '<div class="score-badge ' + (isBust ? 'bust' : '') + '">' + score + (isBust ? ' 💥' : '') + '</div>' +
+                '<div class="cards-row">' + cardsHtml + '</div>' +
+                '<div class="score-badge ' + (isBust && !isHidden ? 'bust' : '') + '">' + displayScore + (isBust && !isHidden ? ' 💥' : '') + '</div>' +
             '</div>';
         }).join('');
         
@@ -508,27 +635,24 @@ function updateGame() {
     var actionsBar = document.getElementById('actions-bar');
     var gameWaiting = document.getElementById('game-waiting');
     
-    // Actions pour le joueur normal
+    // Actions pour le joueur normal (PAS de blocage à 17 pour les joueurs !)
     if (isMyTurn && !gameEnded && !isDealerTurn && !isReveal && me) {
         var hands = JSON.parse(me.hands || '[[]]');
         var activeHand = me.activeHand || 0;
         var currentHand = hands[activeHand] || [];
         var playerScore = calcScore(currentHand);
-        var canDbl = currentHand.length === 2 && playerScore < 17;
+        var canDbl = currentHand.length === 2;
         var canSplt = canSplit();
         
         actionsBar.style.display = 'grid';
-        if (playerScore >= 17) {
-            actionsBar.innerHTML = '<button class="btn btn-secondary" onclick="playerStand()" style="grid-column: span 2;">✋ Rester (' + playerScore + ')</button>';
-        } else {
-            actionsBar.innerHTML = '<button class="btn btn-success" onclick="playerHit()">🃏 Carte</button>' +
-                '<button class="btn btn-secondary" onclick="playerStand()">✋ Stop</button>' +
-                (canDbl ? '<button class="btn btn-accent" onclick="playerDouble()">💰 Doubler</button>' : '') +
-                (canSplt ? '<button class="btn" onclick="playerSplit()">✂️ Split</button>' : '');
-        }
+        // Les joueurs peuvent TOUJOURS tirer ou rester, pas de blocage à 17
+        actionsBar.innerHTML = '<button class="btn btn-success" onclick="playerHit()">🃏 Carte</button>' +
+            '<button class="btn btn-secondary" onclick="playerStand()">✋ Stop</button>' +
+            (canDbl ? '<button class="btn btn-accent" onclick="playerDouble()">💰 Doubler</button>' : '') +
+            (canSplt ? '<button class="btn" onclick="playerSplit()">✂️ Split</button>' : '');
         gameWaiting.style.display = 'none';
     }
-    // Actions pour le dealer (banque)
+    // Actions pour le dealer (banque) - DOIT s'arrêter à 17+
     else if (isDealerTurn && amIDealer) {
         var dealerScore = calcScore(dealerHand);
         actionsBar.style.display = 'grid';
@@ -568,16 +692,26 @@ function updateGame() {
     document.getElementById('other-players').innerHTML = others.map(function(p) {
         var hands = JSON.parse(p.hands || '[[]]');
         var cls = p.id === currentPlayer ? 'active' : '';
+        var pDoubledHidden = JSON.parse(p.doubledHidden || '{}');
         
         var handsHtml = hands.map(function(hand, idx) {
             var score = calcScore(hand);
             var isBust = score > 21;
+            var isHidden = pDoubledHidden[idx] && !gameEnded && !isReveal;
+            
+            var miniCardsHtml = hand.map(function(c, cardIdx) {
+                if (isHidden && cardIdx === hand.length - 1) {
+                    return '<div class="mini-card" style="background:linear-gradient(135deg, #c1121f, #780000);color:white;">?</div>';
+                }
+                return '<div class="mini-card" style="color:' + (['♥','♦'].indexOf(c.suit) >= 0 ? '#e63946' : '#1d3557') + '">' + c.value + '</div>'; 
+            }).join('');
+            
+            var displayScore = isHidden ? '?' : score;
+            
             return '<div class="other-hand">' +
                 (hands.length > 1 ? '<div style="font-size:0.6rem;color:var(--text-muted);">M' + (idx+1) + '</div>' : '') +
-                '<div class="mini-cards">' + hand.map(function(c) { 
-                    return '<div class="mini-card" style="color:' + (['♥','♦'].indexOf(c.suit) >= 0 ? '#e63946' : '#1d3557') + '">' + c.value + '</div>'; 
-                }).join('') + '</div>' +
-                '<div style="font-weight:600;' + (isBust ? 'color:var(--primary);' : '') + '">' + score + '</div>' +
+                '<div class="mini-cards">' + miniCardsHtml + '</div>' +
+                '<div style="font-weight:600;' + (isBust && !isHidden ? 'color:var(--primary);' : '') + '">' + displayScore + '</div>' +
             '</div>';
         }).join('');
         
@@ -623,25 +757,24 @@ function getMyHands() {
     return { hands: hands, activeHand: activeHand };
 }
 
+// CORRIGÉ: Split autorisé pour toutes les cartes de valeur 10 (10, J, Q, K)
 function canSplit() {
     var data = getMyHands();
     var hand = data.hands[data.activeHand];
     if (!hand || hand.length !== 2) return false;
-    // Même carte exacte (deux 10, deux Rois, deux As, etc.)
-    return hand[0].value === hand[1].value;
+    
+    // Valeur effective (10, J, Q, K valent tous 10)
+    var val1 = getCardValue(hand[0]);
+    var val2 = getCardValue(hand[1]);
+    
+    return val1 === val2;
 }
 
+// CORRIGÉ: Les joueurs peuvent tirer sans restriction de 17
 function playerHit() {
     var me = localState.players[myId];
     var hands = JSON.parse(me.hands || '[[]]');
     var activeHand = me.activeHand || 0;
-    var currentScore = calcScore(hands[activeHand]);
-    
-    // Bloqué à 17+
-    if (currentScore >= 17) {
-        toast('Tu dois rester à ' + currentScore + ' !', 'error');
-        return;
-    }
     
     var deck = JSON.parse(localState.deck || '[]');
     
@@ -660,12 +793,6 @@ function playerHit() {
         gameRef.update(updates).then(function() {
             setTimeout(function() { moveToNextHand(); }, 500);
         });
-    } else if (score >= 17) {
-        // Auto-stop à 17+
-        toast(score + ' ! Tu dois rester', 'info');
-        gameRef.update(updates).then(function() {
-            setTimeout(function() { moveToNextHand(); }, 500);
-        });
     } else {
         gameRef.update(updates);
     }
@@ -676,21 +803,17 @@ function playerStand() {
     moveToNextHand();
 }
 
+// CORRIGÉ: Carte cachée lors du double
 function playerDouble() {
     var deck = JSON.parse(localState.deck || '[]');
     var me = localState.players[myId];
     var hands = JSON.parse(me.hands || '[[]]');
     var activeHand = me.activeHand || 0;
     var bet = JSON.parse(me.bet || '{"amount":2,"type":"normal"}');
+    var doubledHidden = JSON.parse(me.doubledHidden || '{}');
     
     if (hands[activeHand].length !== 2) {
         toast('Double uniquement avec 2 cartes !', 'error');
-        return;
-    }
-    
-    var currentScore = calcScore(hands[activeHand]);
-    if (currentScore >= 17) {
-        toast('Tu dois rester à ' + currentScore + ' !', 'error');
         return;
     }
     
@@ -706,12 +829,16 @@ function playerDouble() {
     
     hands[activeHand].push(deck.pop());
     
+    // Marquer cette main comme ayant une carte cachée
+    doubledHidden[activeHand] = true;
+    
     var updates = {
         deck: JSON.stringify(deck),
         updated: Date.now()
     };
     updates['players/' + myId + '/hands'] = JSON.stringify(hands);
     updates['players/' + myId + '/bet'] = JSON.stringify(bet);
+    updates['players/' + myId + '/doubledHidden'] = JSON.stringify(doubledHidden);
     
     toast('Doublé ! 💰', 'info');
     gameRef.update(updates).then(function() {
@@ -805,7 +932,7 @@ function dealerHit() {
     var dealerHand = JSON.parse(localState.dealerHand || '[]');
     var score = calcScore(dealerHand);
     
-    // Bloqué à 17+
+    // Bloqué à 17+ (règle stricte pour la banque)
     if (score >= 17) {
         toast('Tu dois rester à ' + score + ' !', 'error');
         return;
@@ -955,6 +1082,7 @@ function calculateResults(dealerHand) {
         updates['players/' + id + '/totalGorgees'] = (p.totalGorgees || 0) + addGorgees;
         updates['players/' + id + '/totalDemi'] = (p.totalDemi || 0) + addDemi;
         updates['players/' + id + '/totalCulSec'] = (p.totalCulSec || 0) + addCulSec;
+        updates['players/' + id + '/doubledHidden'] = '{}'; // Révéler les cartes cachées
     });
     
     var dealer = localState.players[localState.dealer];
@@ -1081,19 +1209,22 @@ function updateResults() {
         });
     }
     
+    // CORRIGÉ: Score en gorgées (1 demi = 7, 1 cul sec = 15)
     var sorted = players.slice().sort(function(a, b) { 
-        var scoreA = (a.totalGorgees || 0) + (a.totalDemi || 0) * 5 + (a.totalCulSec || 0) * 10;
-        var scoreB = (b.totalGorgees || 0) + (b.totalDemi || 0) * 5 + (b.totalCulSec || 0) * 10;
+        var scoreA = (a.totalGorgees || 0) + (a.totalDemi || 0) * GORGEES_PAR_DEMI + (a.totalCulSec || 0) * GORGEES_PAR_CULSEC;
+        var scoreB = (b.totalGorgees || 0) + (b.totalDemi || 0) * GORGEES_PAR_DEMI + (b.totalCulSec || 0) * GORGEES_PAR_CULSEC;
         return scoreB - scoreA;
     });
     
     document.getElementById('scoreboard').innerHTML = sorted.map(function(p, i) {
         var rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
         var drinks = formatDrinks(p);
+        var totalScore = (p.totalGorgees || 0) + (p.totalDemi || 0) * GORGEES_PAR_DEMI + (p.totalCulSec || 0) * GORGEES_PAR_CULSEC;
         return '<div class="score-item ' + (i===0?'first':'') + '">' +
             '<span class="rank">' + rank + '</span>' +
             '<span class="avatar">' + p.emoji + '</span>' +
-            '<div class="info"><div class="name">' + p.name + (p.id===localState.dealer?' (Banque)':'') + '</div></div>' +
+            '<div class="info"><div class="name">' + p.name + (p.id===localState.dealer?' (Banque)':'') + '</div>' +
+            '<div class="total-score">' + totalScore + ' gorgées eq.</div></div>' +
             '<span class="drinks">' + drinks + '</span>' +
         '</div>';
     }).join('');
@@ -1205,36 +1336,80 @@ function closeResultOverlay() {
     document.getElementById('result-overlay').style.display = 'none';
 }
 
+// CORRIGÉ: Rotation du croupier - attendre un tour complet
 function nextRound() {
     if (!isHost) return;
     
     resultShown = false;
     var deck = JSON.parse(localState.deck || '[]');
-    var newDealer = localState.dealer;
+    var currentDealer = localState.dealer;
+    var newDealer = currentDealer;
     var newOrder = JSON.parse(localState.playerOrder || '[]');
     
+    var players = [];
+    Object.keys(localState.players).forEach(function(id) {
+        var p = localState.players[id];
+        if (p && p.id && p.name) players.push(p);
+    });
+    
+    var updates = {};
+    
+    // Nouveau paquet ?
     if (deck.length < 15) {
         deck = createDeck();
-        var players = [];
-        Object.keys(localState.players).forEach(function(id) {
-            var p = localState.players[id];
-            if (p && p.id && p.name) players.push(p);
+        
+        // Reset wasDealer pour tous
+        players.forEach(function(p) {
+            updates['players/' + p.id + '/wasDealer'] = false;
         });
+        
+        // Choisir un nouveau croupier aléatoire
         newDealer = players[Math.floor(Math.random() * players.length)].id;
-        newOrder = players.filter(function(p) { return p.id !== newDealer; }).map(function(p) { return p.id; });
+        updates['players/' + newDealer + '/wasDealer'] = true;
+        
         toast('Nouveau paquet ! 🎲', 'info');
+    } else {
+        // Trouver le prochain croupier qui n'a pas encore été croupier ce paquet
+        var eligibleDealers = players.filter(function(p) {
+            return !p.wasDealer;
+        });
+        
+        if (eligibleDealers.length === 0) {
+            // Tout le monde a été croupier, reset
+            players.forEach(function(p) {
+                updates['players/' + p.id + '/wasDealer'] = false;
+            });
+            eligibleDealers = players;
+        }
+        
+        // Prendre le suivant dans l'ordre (rotation)
+        var currentIdx = players.findIndex(function(p) { return p.id === currentDealer; });
+        var nextIdx = (currentIdx + 1) % players.length;
+        
+        // Chercher le prochain éligible
+        for (var i = 0; i < players.length; i++) {
+            var checkIdx = (nextIdx + i) % players.length;
+            var candidate = players[checkIdx];
+            if (!candidate.wasDealer) {
+                newDealer = candidate.id;
+                break;
+            }
+        }
+        
+        updates['players/' + newDealer + '/wasDealer'] = true;
     }
     
-    var updates = {
-        status: 'betting',
-        deck: JSON.stringify(deck),
-        dealer: newDealer,
-        playerOrder: JSON.stringify(newOrder),
-        dealerHand: '',
-        currentPlayer: '',
-        round: (localState.round || 1) + 1,
-        updated: Date.now()
-    };
+    newOrder = players.filter(function(p) { return p.id !== newDealer; }).map(function(p) { return p.id; });
+    
+    updates['status'] = 'betting';
+    updates['deck'] = JSON.stringify(deck);
+    updates['dealer'] = newDealer;
+    updates['lastDealer'] = currentDealer;
+    updates['playerOrder'] = JSON.stringify(newOrder);
+    updates['dealerHand'] = '';
+    updates['currentPlayer'] = '';
+    updates['round'] = (localState.round || 1) + 1;
+    updates['updated'] = Date.now();
     
     newOrder.concat([newDealer]).forEach(function(id) {
         updates['players/' + id + '/hands'] = '';
@@ -1243,6 +1418,7 @@ function nextRound() {
         updates['players/' + id + '/bet'] = '';
         updates['players/' + id + '/status'] = 'waiting';
         updates['players/' + id + '/actionDone'] = null;
+        updates['players/' + id + '/doubledHidden'] = '';
     });
     
     gameRef.update(updates);

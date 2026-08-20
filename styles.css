@@ -198,9 +198,19 @@ body { font-family: 'Fredoka', sans-serif; background: var(--bg); color: var(--t
 .scoreboard-title { font-size: 0.9rem; color: var(--text-muted); margin: 1rem 0 0.25rem 0; text-align: center; }
 .scoreboard-legend { font-size: 0.7rem; color: var(--accent); margin-bottom: 0.5rem; text-align: center; font-style: italic; }
 .round-recap { width: 100%; max-width: 350px; margin-bottom: 0.75rem; }
-.round-recap-item { display: flex; align-items: center; gap: 0.5rem; background: var(--card-bg); padding: 0.5rem 0.75rem; border-radius: 10px; margin-bottom: 0.4rem; font-size: 0.85rem; }
+.round-recap-item { display: flex; flex-direction: column; gap: 0.4rem; background: var(--card-bg); padding: 0.5rem 0.75rem; border-radius: 10px; margin-bottom: 0.4rem; font-size: 0.85rem; }
+.round-recap-item .recap-top { display: flex; align-items: center; gap: 0.5rem; }
+.recap-hands { display: flex; flex-direction: column; gap: 0.25rem; }
+.recap-hand { display: flex; align-items: center; gap: 0.35rem; }
+.recap-hand-label { font-size: 0.6rem; color: var(--text-muted); min-width: 16px; }
+.recap-cards { display: flex; gap: 3px; flex: 1; flex-wrap: wrap; }
+.recap-card { background: #fff; color: #1d3557; border-radius: 3px; padding: 1px 4px; font-size: 0.7rem; font-weight: 700; line-height: 1.4; }
+.recap-card.red { color: #e63946; }
+.recap-score { font-size: 0.75rem; font-weight: 700; color: var(--text); min-width: 26px; text-align: right; }
+.recap-score.bust { color: var(--primary); }
+.recap-score.bj { color: #ffd166; font-size: 0.62rem; letter-spacing: 0.03em; }
 .round-recap-item .avatar { font-size: 1.2rem; }
-.round-recap-item .name { flex: 1; font-weight: 500; }
+.round-recap-item .name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .round-recap-item .bet { color: var(--text-muted); font-size: 0.8rem; }
 .round-recap-item .result { font-weight: 600; }
 .round-recap-item .result.won { color: var(--success); }
@@ -221,9 +231,9 @@ body { font-family: 'Fredoka', sans-serif; background: var(--bg); color: var(--t
 .score-item .rank { font-size: 1.3rem; min-width: 30px; }
 .score-item .avatar { font-size: 1.5rem; }
 .score-item .info { flex: 1; }
-.score-item .name { font-weight: 600; font-size: 0.95rem; }
+.score-item .name { font-weight: 600; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .score-item .total-score { font-size: 0.7rem; color: var(--text-muted); }
-.score-item .drinks { font-size: 1.1rem; font-weight: 700; color: var(--primary); }
+.score-item .drinks { font-size: 1.1rem; font-weight: 700; color: var(--primary); white-space: nowrap; }
 
 .toast { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%) translateY(-100px); background: var(--card-bg); padding: 0.6rem 1.2rem; border-radius: 50px; font-weight: 600; font-size: 0.85rem; box-shadow: 0 10px 30px rgba(0,0,0,0.3); transition: transform 0.3s ease; z-index: 1001; max-width: 90%; text-align: center; }
 .toast.show { transform: translateX(-50%) translateY(0); }

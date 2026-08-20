@@ -30,6 +30,7 @@ let selectedBet = { amount: 2, type: 'normal' };
 let localState = { players: {} };
 let currentScreen = 'screen-home';
 let resultShown = false;
+let autoStandKey = '';
 
 // ========== INIT ==========
 function init() {
@@ -597,7 +598,23 @@ function updateGame() {
     var actionsBar = document.getElementById('actions-bar');
     var gameWaiting = document.getElementById('game-waiting');
     
+    var autoStanding = false;
     if (isMyTurn && !gameEnded && !isDealerTurn && !isReveal && me && !amSpectating) {
+        var hNow = JSON.parse(me.hands || '[[]]');
+        var iNow = me.activeHand || 0;
+        var handNow = hNow[iNow] || [];
+        if (handNow.length >= 2 && calcScore(handNow) === 21) {
+            autoStanding = true;
+            var autoKey = 'p:' + (localState.round || 1) + ':' + iNow + ':' + hNow.length + ':' + handNow.length;
+            if (autoStandKey !== autoKey) {
+                autoStandKey = autoKey;
+                toast(isBlackjack(handNow, hNow.length) ? 'BLACKJACK ! \ud83c\udccf' : '21 ! Tu t\'arr\u00eates \ud83c\udfaf', 'success');
+                setTimeout(function() { moveToNextHand(); }, 900);
+            }
+        }
+    }
+    
+    if (isMyTurn && !gameEnded && !isDealerTurn && !isReveal && me && !amSpectating && !autoStanding) {
         var hands = JSON.parse(me.hands || '[[]]');
         var activeHand = me.activeHand || 0;
         var currentHand = hands[activeHand] || [];
@@ -613,7 +630,15 @@ function updateGame() {
     } else if (isDealerTurn && amIDealer) {
         var dealerScore = calcScore(dealerHand);
         actionsBar.style.display = 'grid';
-        if (dealerScore >= 17) {
+        if (dealerScore >= 21) {
+            var dKey = 'd:' + (localState.round || 1) + ':' + dealerHand.length;
+            if (autoStandKey !== dKey) {
+                autoStandKey = dKey;
+                toast(isBlackjack(dealerHand, 1) ? 'BLACKJACK banque ! \ud83c\udccf' : '21 ! La banque reste', 'info');
+                setTimeout(function() { dealerStand(); }, 900);
+            }
+            actionsBar.style.display = 'none';
+        } else if (dealerScore >= 17) {
             actionsBar.innerHTML = '<button class="btn btn-secondary" onclick="dealerStand()" style="grid-column: span 2;">✋ Rester (' + dealerScore + ')</button>';
         } else {
             actionsBar.innerHTML = '<button class="btn btn-success" onclick="dealerHit()">🃏 Tirer</button><button class="btn btn-secondary" disabled>✋ Reste (min 17)</button>';
@@ -626,7 +651,9 @@ function updateGame() {
     } else {
         actionsBar.style.display = 'none';
         gameWaiting.style.display = gameEnded ? 'none' : 'block';
-        if (amSpectating) {
+        if (autoStanding) {
+            document.getElementById('waiting-player').textContent = '21, tu t\'arr\u00eates...';
+        } else if (amSpectating) {
             document.getElementById('waiting-player').textContent = 'Tu regardes cette manche';
         } else if (isDealerTurn) {
             document.getElementById('waiting-player').textContent = (dealer ? dealer.name : '???') + ' (Banque)';
@@ -677,6 +704,19 @@ function getCardValue(c) {
     if (c.value === 'A') return 11;
     if (['K','Q','J'].indexOf(c.value) >= 0) return 10;
     return parseInt(c.value);
+}
+
+function isBlackjack(hand, handCount) {
+    if (handCount !== undefined && handCount !== 1) return false;
+    return !!hand && hand.length === 2 && calcScore(hand) === 21;
+}
+
+function totalGorgeesOf(p) {
+    return (p.totalGorgees || 0) + (p.totalDemi || 0) * GORGEES_PAR_DEMI + (p.totalCulSec || 0) * GORGEES_PAR_CULSEC;
+}
+
+function formatCulSec(totalG) {
+    return (Math.round((totalG / GORGEES_PAR_CULSEC) * 10) / 10).toFixed(1).replace('.', ',');
 }
 
 function calcScore(hand) {
@@ -915,6 +955,7 @@ function calculateResults(dealerHand) {
     
     var dealerScore = calcScore(dealerHand);
     var dealerBust = dealerScore > 21;
+    var dealerBJ = isBlackjack(dealerHand, 1);
     var activeOrder = JSON.parse(localState.activePlayerOrder || localState.playerOrder || '[]');
     var dealerGorgees = 0, dealerDemi = 0, dealerCulSec = 0;
     
@@ -935,32 +976,37 @@ function calculateResults(dealerHand) {
         var wonCount = 0, lostCount = 0;
         var culSecMultiplier = bet.doubled ? 2 : 1;
         
+        var handDetails = [];
+        
+        function loseOne() {
+            lostCount++;
+            if (bet.type === 'culsec') addCulSec += culSecMultiplier;
+            else if (bet.type === 'demi') addDemi++;
+            else addGorgees += bet.amount;
+        }
+        
+        function winOne() {
+            wonCount++;
+            if (bet.type === 'culsec') { dealerCulSec += culSecMultiplier; gaveCulSec += culSecMultiplier; }
+            else if (bet.type === 'demi') { dealerDemi++; gaveDemi++; }
+            else { dealerGorgees += bet.amount; gaveGorgees += bet.amount; }
+        }
+        
         hands.forEach(function(hand) {
             var score = calcScore(hand);
             var bust = score > 21;
+            var playerBJ = isBlackjack(hand, hands.length);
             var result = 'push';
             
-            if (bust) {
-                result = 'lost';
-                lostCount++;
-                if (bet.type === 'culsec') addCulSec += culSecMultiplier;
-                else if (bet.type === 'demi') addDemi++;
-                else addGorgees += bet.amount;
-            } else if (dealerBust || score > dealerScore) {
-                result = 'won';
-                wonCount++;
-                if (bet.type === 'culsec') { dealerCulSec += culSecMultiplier; gaveCulSec += culSecMultiplier; }
-                else if (bet.type === 'demi') { dealerDemi++; gaveDemi++; }
-                else { dealerGorgees += bet.amount; gaveGorgees += bet.amount; }
-            } else if (score < dealerScore) {
-                result = 'lost';
-                lostCount++;
-                if (bet.type === 'culsec') addCulSec += culSecMultiplier;
-                else if (bet.type === 'demi') addDemi++;
-                else addGorgees += bet.amount;
-            }
+            if (bust) { result = 'lost'; loseOne(); }
+            else if (playerBJ && !dealerBJ) { result = 'won'; winOne(); }
+            else if (dealerBJ && !playerBJ) { result = 'lost'; loseOne(); }
+            else if (playerBJ && dealerBJ) { result = 'push'; }
+            else if (dealerBust || score > dealerScore) { result = 'won'; winOne(); }
+            else if (score < dealerScore) { result = 'lost'; loseOne(); }
             
             handResults.push(result);
+            handDetails.push({ cards: hand, score: score, bj: playerBJ, result: result });
         });
         
         var status = 'push';
@@ -968,7 +1014,7 @@ function calculateResults(dealerHand) {
         else if (lostCount > 0 && wonCount === 0) status = 'lost';
         else if (wonCount > 0 && lostCount > 0) status = 'mixed';
         
-        roundRecap.push({ id: id, name: p.name, emoji: p.emoji, bet: bet, status: status, drinks: { gorgees: addGorgees, demi: addDemi, culSec: addCulSec } });
+        roundRecap.push({ id: id, name: p.name, emoji: p.emoji, bet: bet, status: status, hands: handDetails, drinks: { gorgees: addGorgees, demi: addDemi, culSec: addCulSec } });
         
         if (gaveGorgees > 0 || gaveDemi > 0 || gaveCulSec > 0) {
             dealerDrinksFrom.push({ name: p.name, emoji: p.emoji, gorgees: gaveGorgees, demi: gaveDemi, culSec: gaveCulSec });
@@ -990,6 +1036,7 @@ function calculateResults(dealerHand) {
     }
     
     updates['roundRecap'] = JSON.stringify(roundRecap);
+    updates['dealerBJ'] = dealerBJ ? 1 : 0;
     updates['dealerDrinksFrom'] = JSON.stringify(dealerDrinksFrom);
     updates['dealerRoundDrinks'] = JSON.stringify({ gorgees: dealerGorgees, demi: dealerDemi, culSec: dealerCulSec });
     updates['status'] = 'results';
@@ -1001,6 +1048,20 @@ function calculateResults(dealerHand) {
 }
 
 // ========== RESULTS ==========
+function renderRecapHands(handList) {
+    if (!handList || !handList.length) return '';
+    return '<div class="recap-hands">' + handList.map(function(h, i) {
+        var cards = (h.cards || []).map(function(c) {
+            var red = ['♥','♦'].indexOf(c.suit) >= 0;
+            return '<span class="recap-card ' + (red ? 'red' : 'black') + '">' + c.value + c.suit + '</span>';
+        }).join('');
+        var label = handList.length > 1 ? '<span class="recap-hand-label">M' + (i + 1) + '</span>' : '';
+        var badge = h.bj ? '<span class="recap-score bj">BLACKJACK</span>'
+            : '<span class="recap-score' + (h.score > 21 ? ' bust' : '') + '">' + h.score + (h.score > 21 ? ' 💥' : '') + '</span>';
+        return '<div class="recap-hand">' + label + '<span class="recap-cards">' + cards + '</span>' + badge + '</div>';
+    }).join('') + '</div>';
+}
+
 function updateResults() {
     if (currentScreen !== 'screen-results') {
         showScreen('screen-results');
@@ -1022,13 +1083,20 @@ function updateResults() {
         else if (r.status === 'mixed') { resultText = '🔀 Mix'; resultClass = 'push'; }
         else { resultText = '🤝 Égalité'; resultClass = 'push'; }
         
-        return '<div class="round-recap-item"><span class="avatar">' + r.emoji + '</span><span class="name">' + r.name + '</span><span class="bet">' + betText + '</span><span class="result ' + resultClass + '">' + resultText + '</span></div>';
+        return '<div class="round-recap-item">' +
+            '<div class="recap-top"><span class="avatar">' + r.emoji + '</span><span class="name">' + r.name + '</span><span class="bet">' + betText + '</span><span class="result ' + resultClass + '">' + resultText + '</span></div>' +
+            renderRecapHands(r.hands) +
+        '</div>';
     }).join('');
     
     if (dealer) {
         var dealerHand = JSON.parse(localState.dealerHand || '[]');
         var dealerScore = calcScore(dealerHand);
-        recapHtml += '<div class="round-recap-item dealer"><span class="avatar">' + dealer.emoji + '</span><span class="name">' + dealer.name + '</span><span class="bet">🎰 Banque</span><span class="result">' + dealerScore + (dealerScore > 21 ? ' 💥' : '') + '</span></div>';
+        var dealerIsBJ = String(localState.dealerBJ) === '1' || isBlackjack(dealerHand, 1);
+        recapHtml += '<div class="round-recap-item dealer">' +
+            '<div class="recap-top"><span class="avatar">' + dealer.emoji + '</span><span class="name">' + dealer.name + '</span><span class="bet">🎰 Banque</span></div>' +
+            renderRecapHands([{ cards: dealerHand, score: dealerScore, bj: dealerIsBJ }]) +
+        '</div>';
     }
     
     document.getElementById('round-recap').innerHTML = recapHtml;
@@ -1071,16 +1139,12 @@ function updateResults() {
         });
     }
     
-    var sorted = players.slice().sort(function(a, b) { 
-        var scoreA = (a.totalGorgees || 0) + (a.totalDemi || 0) * GORGEES_PAR_DEMI + (a.totalCulSec || 0) * GORGEES_PAR_CULSEC;
-        var scoreB = (b.totalGorgees || 0) + (b.totalDemi || 0) * GORGEES_PAR_DEMI + (b.totalCulSec || 0) * GORGEES_PAR_CULSEC;
-        return scoreB - scoreA;
-    });
+    var sorted = players.slice().sort(function(a, b) { return totalGorgeesOf(b) - totalGorgeesOf(a); });
     
     document.getElementById('scoreboard').innerHTML = sorted.map(function(p, i) {
         var rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
-        var totalScore = (p.totalGorgees || 0) + (p.totalDemi || 0) * GORGEES_PAR_DEMI + (p.totalCulSec || 0) * GORGEES_PAR_CULSEC;
-        return '<div class="score-item ' + (i===0?'first':'') + '"><span class="rank">' + rank + '</span><span class="avatar">' + p.emoji + '</span><div class="info"><div class="name">' + p.name + (p.id===localState.dealer?' (Banque)':'') + '</div><div class="total-score">' + totalScore + ' gorgées</div></div><span class="drinks">' + formatDrinks(p) + '</span></div>';
+        var totalScore = totalGorgeesOf(p);
+        return '<div class="score-item ' + (i===0?'first':'') + '"><span class="rank">' + rank + '</span><span class="avatar">' + p.emoji + '</span><div class="info"><div class="name">' + p.name + (p.id===localState.dealer?' (Banque)':'') + '</div><div class="total-score">' + totalScore + ' gorgées</div></div><span class="drinks">' + formatCulSec(totalScore) + ' 🍻</span></div>';
     }).join('');
     
     document.getElementById('btn-next-round').style.display = isHost ? 'block' : 'none';
@@ -1088,16 +1152,6 @@ function updateResults() {
 
 function formatRoundDrinks(d) {
     var gorgees = d.gorgees || 0, demi = d.demi || 0, culSec = d.culSec || 0;
-    while (demi >= 2) { demi -= 2; culSec += 1; }
-    var parts = [];
-    if (gorgees > 0) parts.push(gorgees + ' 🍺');
-    if (demi > 0) parts.push(demi + ' ½');
-    if (culSec > 0) parts.push(culSec + ' 🍻');
-    return parts.length > 0 ? parts.join(' + ') : '0';
-}
-
-function formatDrinks(p) {
-    var gorgees = p.totalGorgees || 0, demi = p.totalDemi || 0, culSec = p.totalCulSec || 0;
     while (demi >= 2) { demi -= 2; culSec += 1; }
     var parts = [];
     if (gorgees > 0) parts.push(gorgees + ' 🍺');
@@ -1121,8 +1175,11 @@ function showMyResult() {
     
     var icon, title, drinkText, drinkClass = '';
     
+    var myBJ = isBlackjack(hands[0], hands.length);
+    
     if (me.status === 'won') {
-        icon = '🎉'; title = totalHands > 1 ? 'Tu as gagné ' + wonCount + '/' + totalHands + ' mains !' : 'Tu as gagné !';
+        icon = myBJ ? '🃏' : '🎉';
+        title = myBJ ? 'BLACKJACK ! Tu gagnes !' : (totalHands > 1 ? 'Tu as gagné ' + wonCount + '/' + totalHands + ' mains !' : 'Tu as gagné !');
         drinkText = 'Safe !'; drinkClass = 'safe';
     } else if (me.status === 'mixed') {
         icon = '😬'; title = 'Mix : ' + wonCount + ' gagné, ' + lostCount + ' perdu';

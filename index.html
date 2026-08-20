@@ -31,7 +31,7 @@
     
     <div class="screen" id="screen-create">
         <div class="logo"><div class="logo-icon">🎯</div><h1>Crée ta partie</h1></div>
-        <div class="input-group"><label>Ton pseudo</label><input type="text" id="create-name" placeholder="Ex: Antonin" maxlength="10"></div>
+        <div class="input-group"><label>Ton pseudo</label><input type="text" id="create-name" placeholder="Ex: Antonin" maxlength="18"></div>
         <div class="input-group"><label>Choisis ton emoji</label><div class="emoji-picker" id="create-emoji-picker"></div></div>
         <button class="btn btn-success" onclick="createRoom()">✨ Créer</button>
         <button class="btn btn-secondary btn-small" style="margin-top: 0.75rem;" onclick="showScreen('screen-home')">← Retour</button>
@@ -40,7 +40,7 @@
     <div class="screen" id="screen-join">
         <div class="logo"><div class="logo-icon">🔗</div><h1>Rejoindre</h1></div>
         <div class="input-group"><label>Code de la partie</label><input type="text" id="join-code" placeholder="XXXX" maxlength="4" style="text-transform: uppercase; letter-spacing: 0.2em; font-size: 1.4rem;"></div>
-        <div class="input-group"><label>Ton pseudo</label><input type="text" id="join-name" placeholder="Ex: Tom" maxlength="10"></div>
+        <div class="input-group"><label>Ton pseudo</label><input type="text" id="join-name" placeholder="Ex: Tom" maxlength="18"></div>
         <div class="input-group"><label>Choisis ton emoji</label><div class="emoji-picker" id="join-emoji-picker"></div></div>
         <button class="btn btn-success" onclick="joinRoom()">🚀 Rejoindre</button>
         <button class="btn btn-secondary btn-small" style="margin-top: 0.75rem;" onclick="showScreen('screen-home')">← Retour</button>
@@ -112,7 +112,7 @@
         <div class="round-recap" id="round-recap"></div>
         <div class="round-drinks" id="round-drinks"></div>
         <div class="scoreboard-title">📊 Scores cumulés</div>
-        <div class="scoreboard-legend">1 cul sec = 15g | ½ cul sec = 7g</div>
+        <div class="scoreboard-legend">Total en culs secs · 1 cul sec = 15 gorgées · ½ cul sec = 7 gorgées</div>
         <div class="scoreboard" id="scoreboard"></div>
         <div class="btn-group" style="margin-top: 1rem;">
             <button class="btn" onclick="nextRound()" id="btn-next-round">🔄 Tour suivant</button>

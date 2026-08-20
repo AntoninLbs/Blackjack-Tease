@@ -715,10 +715,6 @@ function totalGorgeesOf(p) {
     return (p.totalGorgees || 0) + (p.totalDemi || 0) * GORGEES_PAR_DEMI + (p.totalCulSec || 0) * GORGEES_PAR_CULSEC;
 }
 
-function formatCulSec(totalG) {
-    return (Math.round((totalG / GORGEES_PAR_CULSEC) * 10) / 10).toFixed(1).replace('.', ',');
-}
-
 function calcScore(hand) {
     if (!hand || hand.length === 0) return 0;
     var score = 0, aces = 0;
@@ -1144,7 +1140,7 @@ function updateResults() {
     document.getElementById('scoreboard').innerHTML = sorted.map(function(p, i) {
         var rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
         var totalScore = totalGorgeesOf(p);
-        return '<div class="score-item ' + (i===0?'first':'') + '"><span class="rank">' + rank + '</span><span class="avatar">' + p.emoji + '</span><div class="info"><div class="name">' + p.name + (p.id===localState.dealer?' (Banque)':'') + '</div><div class="total-score">' + totalScore + ' gorgées</div></div><span class="drinks">' + formatCulSec(totalScore) + ' 🍻</span></div>';
+        return '<div class="score-item ' + (i===0?'first':'') + '"><span class="rank">' + rank + '</span><span class="avatar">' + p.emoji + '</span><div class="info"><div class="name">' + p.name + (p.id===localState.dealer?' (Banque)':'') + '</div></div><span class="drinks">' + totalScore + ' 🍺</span></div>';
     }).join('');
     
     document.getElementById('btn-next-round').style.display = isHost ? 'block' : 'none';

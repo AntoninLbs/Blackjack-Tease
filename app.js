@@ -9,7 +9,6 @@ const firebaseConfig = {
     appId: "1:193161343098:web:293b2d54631e5d0e900bc3"
 };
 
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
@@ -17,8 +16,6 @@ const db = firebase.database();
 const EMOJIS = ['😎', '🤠', '🥳', '😈', '🤩', '🧐', '🤪', '😏', '🦊', '🐸', '🦄', '👻', '🎃', '🤑', '🥴'];
 const SUITS = ['♠', '♥', '♦', '♣'];
 const VALUES = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-
-// Valeurs pour le score général
 const GORGEES_PAR_DEMI = 7;
 const GORGEES_PAR_CULSEC = 15;
 
@@ -33,7 +30,6 @@ let selectedBet = { amount: 2, type: 'normal' };
 let localState = { players: {} };
 let currentScreen = 'screen-home';
 let resultShown = false;
-let unsubscribers = [];
 
 // ========== INIT ==========
 function init() {
@@ -44,9 +40,7 @@ function init() {
         this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     });
     
-    // Tenter de reconnecter si session existante
     tryReconnect();
-    
     console.log('✅ Firebase initialisé');
 }
 
@@ -65,7 +59,6 @@ function tryReconnect() {
         gameRef = db.ref('games/' + roomCode);
         playersRef = gameRef.child('players');
         
-        // Vérifier si la partie existe encore
         gameRef.once('value').then(function(snapshot) {
             var data = snapshot.val();
             
@@ -75,35 +68,21 @@ function tryReconnect() {
                 return;
             }
             
-            // Vérifier si on est toujours dans la partie
             if (data.players && data.players[myId]) {
                 isHost = data.host === myId;
                 subscribeToGame();
                 hideLoading();
                 toast('Reconnecté ! 🔄', 'success');
             } else {
-                // Plus dans la partie, on peut re-rejoindre
                 var joinStatus = data.status === 'lobby' ? 'waiting' : 'spectating';
                 playersRef.child(myId).set({
-                    id: myId,
-                    name: myName,
-                    emoji: myEmoji,
-                    isHost: false,
-                    bet: '',
-                    hand: '',
-                    status: joinStatus,
-                    totalGorgees: 0,
-                    totalDemi: 0,
-                    totalCulSec: 0,
-                    joined: Date.now()
+                    id: myId, name: myName, emoji: myEmoji, isHost: false,
+                    bet: '', hand: '', status: joinStatus,
+                    totalGorgees: 0, totalDemi: 0, totalCulSec: 0, joined: Date.now()
                 }).then(function() {
                     subscribeToGame();
                     hideLoading();
-                    if (joinStatus === 'spectating') {
-                        toast('Reconnecté ! Tu joueras au prochain tour', 'info');
-                    } else {
-                        toast('Reconnecté ! 🔄', 'success');
-                    }
+                    toast(joinStatus === 'spectating' ? 'Reconnecté ! Tu joueras au prochain tour' : 'Reconnecté ! 🔄', joinStatus === 'spectating' ? 'info' : 'success');
                 });
             }
         }).catch(function() {
@@ -149,8 +128,7 @@ function showScreen(id) {
 }
 
 function updateRoomCodeDisplay() {
-    var codeElements = document.querySelectorAll('.game-room-code');
-    codeElements.forEach(function(el) {
+    document.querySelectorAll('.game-room-code').forEach(function(el) {
         el.textContent = roomCode;
     });
 }
@@ -192,30 +170,14 @@ function createRoom() {
     var ts = Date.now();
     
     gameRef.set({
-        code: roomCode,
-        host: myId,
-        status: 'lobby',
-        round: 0,
-        deck: '',
-        dealer: '',
-        dealerHand: '',
-        currentPlayer: '',
-        playerOrder: '',
-        created: ts,
-        updated: ts
+        code: roomCode, host: myId, status: 'lobby', round: 0,
+        deck: '', dealer: '', dealerHand: '', currentPlayer: '',
+        playerOrder: '', created: ts, updated: ts
     }).then(function() {
         return playersRef.child(myId).set({
-            id: myId,
-            name: myName,
-            emoji: myEmoji,
-            isHost: true,
-            bet: '',
-            hand: '',
-            status: 'waiting',
-            totalGorgees: 0,
-            totalDemi: 0,
-            totalCulSec: 0,
-            joined: ts
+            id: myId, name: myName, emoji: myEmoji, isHost: true,
+            bet: '', hand: '', status: 'waiting',
+            totalGorgees: 0, totalDemi: 0, totalCulSec: 0, joined: ts
         });
     }).then(function() {
         saveSession();
@@ -255,21 +217,12 @@ function joinRoom() {
             return;
         }
         
-        // On peut rejoindre même si en cours (spectateur jusqu'à prochaine manche)
         var joinStatus = data.status === 'lobby' ? 'waiting' : 'spectating';
         
         return playersRef.child(myId).set({
-            id: myId,
-            name: myName,
-            emoji: myEmoji,
-            isHost: false,
-            bet: '',
-            hand: '',
-            status: joinStatus,
-            totalGorgees: 0,
-            totalDemi: 0,
-            totalCulSec: 0,
-            joined: Date.now()
+            id: myId, name: myName, emoji: myEmoji, isHost: false,
+            bet: '', hand: '', status: joinStatus,
+            totalGorgees: 0, totalDemi: 0, totalCulSec: 0, joined: Date.now()
         });
     }).then(function() {
         saveSession();
@@ -301,7 +254,6 @@ function leaveGame() {
     if (!confirm('Vraiment quitter la partie ?')) return;
     
     var wasHost = isHost;
-    var currentStatus = localState.status;
     
     if (playersRef && myId) {
         playersRef.child(myId).remove().then(function() {
@@ -359,9 +311,7 @@ function subscribeToGame() {
             if (k !== 'players') localState[k] = data[k];
         });
         
-        if (data.players) {
-            localState.players = data.players;
-        }
+        if (data.players) localState.players = data.players;
         
         handleStateUpdate();
     });
@@ -423,14 +373,9 @@ function hostStartGame() {
     var order = players.filter(function(p) { return p.id !== randomDealer; }).map(function(p) { return p.id; });
     
     gameRef.update({
-        status: 'betting',
-        deck: JSON.stringify(deck),
-        dealer: randomDealer,
-        playerOrder: JSON.stringify(order),
-        round: 1,
-        dealerHand: '',
-        currentPlayer: '',
-        updated: Date.now()
+        status: 'betting', deck: JSON.stringify(deck), dealer: randomDealer,
+        playerOrder: JSON.stringify(order), round: 1, dealerHand: '',
+        currentPlayer: '', updated: Date.now()
     }).then(function() {
         hideLoading();
         toast('Partie lancée ! 🎲', 'success');
@@ -457,11 +402,8 @@ function createDeck() {
 function updateBetting() {
     if (currentScreen !== 'screen-bet') showScreen('screen-bet');
     
-    var dealer = null;
-    if (localState.players && localState.dealer) {
-        dealer = localState.players[localState.dealer];
-    }
-    document.getElementById('bet-dealer-info').textContent = 'Banquier: ' + (dealer ? dealer.emoji : '?') + ' ' + (dealer ? dealer.name : '???');
+    var dealer = localState.players && localState.dealer ? localState.players[localState.dealer] : null;
+    document.getElementById('bet-dealer-info').textContent = 'Banquier: ' + (dealer ? dealer.emoji + ' ' + dealer.name : '???');
     
     var amIDealer = localState.dealer === myId;
     var me = localState.players ? localState.players[myId] : null;
@@ -471,19 +413,11 @@ function updateBetting() {
     var confirmBtn = document.getElementById('btn-confirm-bet');
     
     if (amSpectating) {
-        betOptions.innerHTML = '<div style="text-align:center; padding:1.5rem; grid-column:span 3;">' +
-            '<div style="font-size:2.5rem;">👀</div>' +
-            '<div>Tu regardes cette manche</div>' +
-            '<div style="color:var(--text-muted); font-size:0.8rem;">Tu joueras à la prochaine !</div>' +
-        '</div>';
+        betOptions.innerHTML = '<div style="text-align:center; padding:1.5rem; grid-column:span 3;"><div style="font-size:2.5rem;">👀</div><div>Tu regardes cette manche</div><div style="color:var(--text-muted); font-size:0.8rem;">Tu joueras à la prochaine !</div></div>';
         confirmBtn.style.display = 'none';
         document.getElementById('bet-waiting').style.display = 'none';
     } else if (amIDealer) {
-        betOptions.innerHTML = '<div style="text-align:center; padding:1.5rem; grid-column:span 3;">' +
-            '<div style="font-size:2.5rem;">🎩</div>' +
-            '<div>Tu es la BANQUE !</div>' +
-            '<div style="color:var(--text-muted); font-size:0.8rem;">Attends les mises...</div>' +
-        '</div>';
+        betOptions.innerHTML = '<div style="text-align:center; padding:1.5rem; grid-column:span 3;"><div style="font-size:2.5rem;">🎩</div><div>Tu es la BANQUE !</div><div style="color:var(--text-muted); font-size:0.8rem;">Attends les mises...</div></div>';
         confirmBtn.style.display = 'none';
     } else {
         renderBetOptions();
@@ -496,22 +430,9 @@ function updateBetting() {
 }
 
 function renderBetOptions() {
-    var html = '<div class="bet-custom">' +
-        '<label>Nombre de gorgées</label>' +
-        '<div class="bet-input-row">' +
-            '<button class="btn-adjust" onclick="adjustBet(-1)">−</button>' +
-            '<input type="number" id="bet-amount-input" min="1" max="50" value="' + selectedBet.amount + '" onchange="updateBetAmount(this.value)">' +
-            '<button class="btn-adjust" onclick="adjustBet(1)">+</button>' +
-        '</div>' +
-    '</div>' +
-    '<div class="bet-specials">' +
-        '<div class="bet-option demi ' + (selectedBet.type==='demi'?'selected':'') + '" onclick="selectBetType(\'demi\')">' +
-            '<span class="number">½</span><span class="label">cul sec (' + GORGEES_PAR_DEMI + 'g)</span>' +
-        '</div>' +
-        '<div class="bet-option special ' + (selectedBet.type==='culsec'?'selected':'') + '" onclick="selectBetType(\'culsec\')">' +
-            '<span class="number">🍺</span><span class="label">cul sec (' + GORGEES_PAR_CULSEC + 'g)</span>' +
-        '</div>' +
-    '</div>';
+    var html = '<div class="bet-custom"><label>Nombre de gorgées</label><div class="bet-input-row"><button class="btn-adjust" onclick="adjustBet(-1)">−</button><input type="number" id="bet-amount-input" min="1" max="50" value="' + selectedBet.amount + '" onchange="updateBetAmount(this.value)"><button class="btn-adjust" onclick="adjustBet(1)">+</button></div></div>' +
+        '<div class="bet-specials"><div class="bet-option demi ' + (selectedBet.type==='demi'?'selected':'') + '" onclick="selectBetType(\'demi\')"><span class="number">½</span><span class="label">cul sec (' + GORGEES_PAR_DEMI + 'g)</span></div>' +
+        '<div class="bet-option special ' + (selectedBet.type==='culsec'?'selected':'') + '" onclick="selectBetType(\'culsec\')"><span class="number">🍺</span><span class="label">cul sec (' + GORGEES_PAR_CULSEC + 'g)</span></div></div>';
     document.getElementById('bet-options').innerHTML = html;
 }
 
@@ -537,10 +458,7 @@ function selectBetType(type) {
 }
 
 function confirmBet() {
-    playersRef.child(myId).update({
-        bet: JSON.stringify(selectedBet),
-        status: 'ready'
-    });
+    playersRef.child(myId).update({ bet: JSON.stringify(selectedBet), status: 'ready' });
     toast('Mise enregistrée !', 'success');
 }
 
@@ -621,7 +539,7 @@ function updateGame() {
     document.getElementById('game-round-info').textContent = 'Tour ' + (localState.round || 1);
     
     var dealer = localState.players ? localState.players[localState.dealer] : null;
-    document.getElementById('game-dealer-name').textContent = (dealer ? dealer.emoji : '?') + ' ' + (dealer ? dealer.name : '???');
+    document.getElementById('game-dealer-name').textContent = (dealer ? dealer.emoji + ' ' + dealer.name : '???');
     
     var dealerRevealed = isDealerTurn || isReveal || gameEnded;
     
@@ -642,14 +560,7 @@ function updateGame() {
         document.getElementById('my-name').textContent = me.name;
         
         var bet = JSON.parse(me.bet || '{"amount":2,"type":"normal"}');
-        var betText = '';
-        if (bet.type === 'culsec') {
-            betText = bet.doubled ? '🍺🍺 2 Cul sec' : '🍺 Cul sec';
-        } else if (bet.type === 'demi') {
-            betText = '½ cul sec';
-        } else {
-            betText = bet.amount + ' gorgées';
-        }
+        var betText = bet.type === 'culsec' ? (bet.doubled ? '🍺🍺 2 Cul sec' : '🍺 Cul sec') : bet.type === 'demi' ? '½ cul sec' : bet.amount + ' gorgées';
         document.getElementById('my-bet').textContent = betText;
         
         var hands = JSON.parse(me.hands || '[[]]');
@@ -663,9 +574,7 @@ function updateGame() {
             var isHidden = doubledHidden[idx] && !gameEnded && !isReveal;
             
             var cardsHtml = hand.map(function(c, cardIdx) {
-                if (isHidden && cardIdx === hand.length - 1) {
-                    return '<div class="card hidden"></div>';
-                }
+                if (isHidden && cardIdx === hand.length - 1) return '<div class="card hidden"></div>';
                 return renderCard(c);
             }).join('');
             
@@ -701,24 +610,20 @@ function updateGame() {
             (canDbl ? '<button class="btn btn-accent" onclick="playerDouble()">💰 Doubler</button>' : '') +
             (canSplt ? '<button class="btn" onclick="playerSplit()">✂️ Split</button>' : '');
         gameWaiting.style.display = 'none';
-    }
-    else if (isDealerTurn && amIDealer) {
+    } else if (isDealerTurn && amIDealer) {
         var dealerScore = calcScore(dealerHand);
         actionsBar.style.display = 'grid';
         if (dealerScore >= 17) {
             actionsBar.innerHTML = '<button class="btn btn-secondary" onclick="dealerStand()" style="grid-column: span 2;">✋ Rester (' + dealerScore + ')</button>';
         } else {
-            actionsBar.innerHTML = '<button class="btn btn-success" onclick="dealerHit()">🃏 Tirer</button>' +
-                '<button class="btn btn-secondary" disabled>✋ Reste (min 17)</button>';
+            actionsBar.innerHTML = '<button class="btn btn-success" onclick="dealerHit()">🃏 Tirer</button><button class="btn btn-secondary" disabled>✋ Reste (min 17)</button>';
         }
         gameWaiting.style.display = 'none';
-    }
-    else if (isReveal && isHost) {
+    } else if (isReveal && isHost) {
         actionsBar.style.display = 'grid';
         actionsBar.innerHTML = '<button class="btn btn-success" onclick="hostValidateResults()" style="grid-column: span 2;">✅ Voir les résultats</button>';
         gameWaiting.style.display = 'none';
-    }
-    else {
+    } else {
         actionsBar.style.display = 'none';
         gameWaiting.style.display = gameEnded ? 'none' : 'block';
         if (amSpectating) {
@@ -748,35 +653,24 @@ function updateGame() {
             var isHidden = pDoubledHidden[idx] && !gameEnded && !isReveal;
             
             var miniCardsHtml = hand.map(function(c, cardIdx) {
-                if (isHidden && cardIdx === hand.length - 1) {
-                    return '<div class="mini-card" style="background:linear-gradient(135deg, #c1121f, #780000);color:white;">?</div>';
-                }
+                if (isHidden && cardIdx === hand.length - 1) return '<div class="mini-card" style="background:linear-gradient(135deg, #c1121f, #780000);color:white;">?</div>';
                 return '<div class="mini-card" style="color:' + (['♥','♦'].indexOf(c.suit) >= 0 ? '#e63946' : '#1d3557') + '">' + c.value + '</div>'; 
             }).join('');
-            
-            var displayScore = isHidden ? '?' : score;
             
             return '<div class="other-hand">' +
                 (hands.length > 1 ? '<div style="font-size:0.6rem;color:var(--text-muted);">M' + (idx+1) + '</div>' : '') +
                 '<div class="mini-cards">' + miniCardsHtml + '</div>' +
-                '<div style="font-weight:600;' + (isBust && !isHidden ? 'color:var(--primary);' : '') + '">' + displayScore + '</div>' +
+                '<div style="font-weight:600;' + (isBust && !isHidden ? 'color:var(--primary);' : '') + '">' + (isHidden ? '?' : score) + '</div>' +
             '</div>';
         }).join('');
         
-        return '<div class="other-player ' + cls + '">' +
-            '<div class="avatar">' + p.emoji + '</div>' +
-            '<div>' + p.name + '</div>' +
-            handsHtml +
-        '</div>';
+        return '<div class="other-player ' + cls + '"><div class="avatar">' + p.emoji + '</div><div>' + p.name + '</div>' + handsHtml + '</div>';
     }).join('');
 }
 
 function renderCard(c) {
     var red = ['♥','♦'].indexOf(c.suit) >= 0;
-    return '<div class="card ' + (red ? 'red' : 'black') + '">' +
-        '<span class="card-value">' + c.value + '</span>' +
-        '<span class="card-suit">' + c.suit + '</span>' +
-    '</div>';
+    return '<div class="card ' + (red ? 'red' : 'black') + '"><span class="card-value">' + c.value + '</span><span class="card-suit">' + c.suit + '</span></div>';
 }
 
 function getCardValue(c) {
@@ -800,34 +694,26 @@ function calcScore(hand) {
 function getMyHands() {
     var me = localState.players ? localState.players[myId] : null;
     if (!me) return { hands: [[]], activeHand: 0 };
-    var hands = JSON.parse(me.hands || '[[]]');
-    var activeHand = me.activeHand || 0;
-    return { hands: hands, activeHand: activeHand };
+    return { hands: JSON.parse(me.hands || '[[]]'), activeHand: me.activeHand || 0 };
 }
 
 function canSplit() {
     var data = getMyHands();
     var hand = data.hands[data.activeHand];
     if (!hand || hand.length !== 2) return false;
-    var val1 = getCardValue(hand[0]);
-    var val2 = getCardValue(hand[1]);
-    return val1 === val2;
+    return getCardValue(hand[0]) === getCardValue(hand[1]);
 }
 
 function playerHit() {
     var me = localState.players[myId];
     var hands = JSON.parse(me.hands || '[[]]');
     var activeHand = me.activeHand || 0;
-    
     var deck = JSON.parse(localState.deck || '[]');
     
     hands[activeHand].push(deck.pop());
     var score = calcScore(hands[activeHand]);
     
-    var updates = {
-        deck: JSON.stringify(deck),
-        updated: Date.now()
-    };
+    var updates = { deck: JSON.stringify(deck), updated: Date.now() };
     updates['players/' + myId + '/hands'] = JSON.stringify(hands);
     
     if (score > 21) {
@@ -858,22 +744,14 @@ function playerDouble() {
         return;
     }
     
-    if (bet.type === 'demi') {
-        bet.type = 'culsec';
-    } else if (bet.type === 'culsec') {
-        bet.type = 'culsec';
-        bet.doubled = true;
-    } else {
-        bet.amount *= 2;
-    }
+    if (bet.type === 'demi') bet.type = 'culsec';
+    else if (bet.type === 'culsec') { bet.type = 'culsec'; bet.doubled = true; }
+    else bet.amount *= 2;
     
     hands[activeHand].push(deck.pop());
     doubledHidden[activeHand] = true;
     
-    var updates = {
-        deck: JSON.stringify(deck),
-        updated: Date.now()
-    };
+    var updates = { deck: JSON.stringify(deck), updated: Date.now() };
     updates['players/' + myId + '/hands'] = JSON.stringify(hands);
     updates['players/' + myId + '/bet'] = JSON.stringify(bet);
     updates['players/' + myId + '/doubledHidden'] = JSON.stringify(doubledHidden);
@@ -902,10 +780,7 @@ function playerSplit() {
     hands[activeHand] = [card1, deck.pop()];
     hands.push([card2, deck.pop()]);
     
-    var updates = {
-        deck: JSON.stringify(deck),
-        updated: Date.now()
-    };
+    var updates = { deck: JSON.stringify(deck), updated: Date.now() };
     updates['players/' + myId + '/hands'] = JSON.stringify(hands);
     
     toast('Split ! ✂️ Tu as ' + hands.length + ' mains', 'success');
@@ -947,19 +822,22 @@ function moveNext() {
         gameRef.update({ currentPlayer: activeOrder[idx + 1], updated: Date.now() });
     } else {
         // Vérifier si tous les joueurs ont bust
-        var allBust = activeOrder.every(function(id) {
-            var p = localState.players[id];
-            if (!p || p.status === 'spectating') return true;
+        var allBust = true;
+        for (var i = 0; i < activeOrder.length; i++) {
+            var p = localState.players[activeOrder[i]];
+            if (!p || p.status === 'spectating') continue;
             var hands = JSON.parse(p.hands || '[[]]');
-            // Toutes les mains du joueur doivent être bust
-            return hands.every(function(hand) {
-                return calcScore(hand) > 21;
-            });
-        });
+            for (var j = 0; j < hands.length; j++) {
+                if (calcScore(hands[j]) <= 21) {
+                    allBust = false;
+                    break;
+                }
+            }
+            if (!allBust) break;
+        }
         
         if (allBust) {
-            // Tous bust → pas besoin de jouer la banque
-            toast('Tous les joueurs ont bust ! 💥', 'info');
+            toast('Tous bust ! La banque gagne ! 💥', 'info');
             gameRef.update({ currentPlayer: 'reveal', updated: Date.now() });
         } else {
             gameRef.update({ currentPlayer: 'dealer', updated: Date.now() });
@@ -985,8 +863,7 @@ setInterval(function() {
 
 // ========== DEALER ==========
 function dealerHit() {
-    var amIDealer = localState.dealer === myId;
-    if (!amIDealer) return;
+    if (localState.dealer !== myId) return;
     
     var dealerHand = JSON.parse(localState.dealerHand || '[]');
     var score = calcScore(dealerHand);
@@ -1000,30 +877,21 @@ function dealerHit() {
     dealerHand.push(deck.pop());
     score = calcScore(dealerHand);
     
-    var updates = {
-        deck: JSON.stringify(deck),
-        dealerHand: JSON.stringify(dealerHand),
-        updated: Date.now()
-    };
+    var updates = { deck: JSON.stringify(deck), dealerHand: JSON.stringify(dealerHand), updated: Date.now() };
     
     if (score > 21) {
         updates['currentPlayer'] = 'reveal';
-        gameRef.update(updates).then(function() {
-            toast('Banque brûlée ! 💥', 'error');
-        });
+        gameRef.update(updates).then(function() { toast('Banque brûlée ! 💥', 'error'); });
     } else if (score >= 17) {
         updates['currentPlayer'] = 'reveal';
-        gameRef.update(updates).then(function() {
-            toast('Banque à ' + score + ', tu dois rester', 'info');
-        });
+        gameRef.update(updates).then(function() { toast('Banque à ' + score + ', tu dois rester', 'info'); });
     } else {
         gameRef.update(updates);
     }
 }
 
 function dealerStand() {
-    var amIDealer = localState.dealer === myId;
-    if (!amIDealer) return;
+    if (localState.dealer !== myId) return;
     
     var dealerHand = JSON.parse(localState.dealerHand || '[]');
     var score = calcScore(dealerHand);
@@ -1039,8 +907,7 @@ function dealerStand() {
 
 function hostValidateResults() {
     if (!isHost) return;
-    var dealerHand = JSON.parse(localState.dealerHand || '[]');
-    calculateResults(dealerHand);
+    calculateResults(JSON.parse(localState.dealerHand || '[]'));
 }
 
 function calculateResults(dealerHand) {
@@ -1066,7 +933,6 @@ function calculateResults(dealerHand) {
         var gaveGorgees = 0, gaveDemi = 0, gaveCulSec = 0;
         var handResults = [];
         var wonCount = 0, lostCount = 0;
-        
         var culSecMultiplier = bet.doubled ? 2 : 1;
         
         hands.forEach(function(hand) {
@@ -1083,16 +949,9 @@ function calculateResults(dealerHand) {
             } else if (dealerBust || score > dealerScore) {
                 result = 'won';
                 wonCount++;
-                if (bet.type === 'culsec') {
-                    dealerCulSec += culSecMultiplier;
-                    gaveCulSec += culSecMultiplier;
-                } else if (bet.type === 'demi') {
-                    dealerDemi++;
-                    gaveDemi++;
-                } else {
-                    dealerGorgees += bet.amount;
-                    gaveGorgees += bet.amount;
-                }
+                if (bet.type === 'culsec') { dealerCulSec += culSecMultiplier; gaveCulSec += culSecMultiplier; }
+                else if (bet.type === 'demi') { dealerDemi++; gaveDemi++; }
+                else { dealerGorgees += bet.amount; gaveGorgees += bet.amount; }
             } else if (score < dealerScore) {
                 result = 'lost';
                 lostCount++;
@@ -1109,23 +968,10 @@ function calculateResults(dealerHand) {
         else if (lostCount > 0 && wonCount === 0) status = 'lost';
         else if (wonCount > 0 && lostCount > 0) status = 'mixed';
         
-        roundRecap.push({
-            id: id,
-            name: p.name,
-            emoji: p.emoji,
-            bet: bet,
-            status: status,
-            drinks: { gorgees: addGorgees, demi: addDemi, culSec: addCulSec }
-        });
+        roundRecap.push({ id: id, name: p.name, emoji: p.emoji, bet: bet, status: status, drinks: { gorgees: addGorgees, demi: addDemi, culSec: addCulSec } });
         
         if (gaveGorgees > 0 || gaveDemi > 0 || gaveCulSec > 0) {
-            dealerDrinksFrom.push({
-                name: p.name,
-                emoji: p.emoji,
-                gorgees: gaveGorgees,
-                demi: gaveDemi,
-                culSec: gaveCulSec
-            });
+            dealerDrinksFrom.push({ name: p.name, emoji: p.emoji, gorgees: gaveGorgees, demi: gaveDemi, culSec: gaveCulSec });
         }
         
         updates['players/' + id + '/status'] = status;
@@ -1146,7 +992,6 @@ function calculateResults(dealerHand) {
     updates['roundRecap'] = JSON.stringify(roundRecap);
     updates['dealerDrinksFrom'] = JSON.stringify(dealerDrinksFrom);
     updates['dealerRoundDrinks'] = JSON.stringify({ gorgees: dealerGorgees, demi: dealerDemi, culSec: dealerCulSec });
-    
     updates['status'] = 'results';
     updates['currentPlayer'] = 'done';
     updates['dealerHand'] = JSON.stringify(dealerHand);
@@ -1162,9 +1007,7 @@ function updateResults() {
         if (!resultShown) {
             resultShown = true;
             var me = localState.players ? localState.players[myId] : null;
-            if (me && me.status !== 'spectating') {
-                showMyResult();
-            }
+            if (me && me.status !== 'spectating') showMyResult();
         }
     }
     
@@ -1172,35 +1015,20 @@ function updateResults() {
     var dealer = localState.players ? localState.players[localState.dealer] : null;
     
     var recapHtml = roundRecap.map(function(r) {
-        var betText = '';
-        if (r.bet.type === 'culsec') betText = r.bet.doubled ? '2 cul sec' : '1 cul sec';
-        else if (r.bet.type === 'demi') betText = '½ cul sec';
-        else betText = r.bet.amount + ' gorgées';
-        
-        var resultText = '';
-        var resultClass = '';
+        var betText = r.bet.type === 'culsec' ? (r.bet.doubled ? '2 cul sec' : '1 cul sec') : r.bet.type === 'demi' ? '½ cul sec' : r.bet.amount + ' gorgées';
+        var resultText = '', resultClass = '';
         if (r.status === 'won') { resultText = '✅ Gagne'; resultClass = 'won'; }
         else if (r.status === 'lost') { resultText = '❌ Perd'; resultClass = 'lost'; }
         else if (r.status === 'mixed') { resultText = '🔀 Mix'; resultClass = 'push'; }
         else { resultText = '🤝 Égalité'; resultClass = 'push'; }
         
-        return '<div class="round-recap-item">' +
-            '<span class="avatar">' + r.emoji + '</span>' +
-            '<span class="name">' + r.name + '</span>' +
-            '<span class="bet">' + betText + '</span>' +
-            '<span class="result ' + resultClass + '">' + resultText + '</span>' +
-        '</div>';
+        return '<div class="round-recap-item"><span class="avatar">' + r.emoji + '</span><span class="name">' + r.name + '</span><span class="bet">' + betText + '</span><span class="result ' + resultClass + '">' + resultText + '</span></div>';
     }).join('');
     
     if (dealer) {
         var dealerHand = JSON.parse(localState.dealerHand || '[]');
         var dealerScore = calcScore(dealerHand);
-        recapHtml += '<div class="round-recap-item dealer">' +
-            '<span class="avatar">' + dealer.emoji + '</span>' +
-            '<span class="name">' + dealer.name + '</span>' +
-            '<span class="bet">🎰 Banque</span>' +
-            '<span class="result">' + dealerScore + (dealerScore > 21 ? ' 💥' : '') + '</span>' +
-        '</div>';
+        recapHtml += '<div class="round-recap-item dealer"><span class="avatar">' + dealer.emoji + '</span><span class="name">' + dealer.name + '</span><span class="bet">🎰 Banque</span><span class="result">' + dealerScore + (dealerScore > 21 ? ' 💥' : '') + '</span></div>';
     }
     
     document.getElementById('round-recap').innerHTML = recapHtml;
@@ -1214,39 +1042,24 @@ function updateResults() {
     roundRecap.forEach(function(r) {
         if (r.drinks.gorgees > 0 || r.drinks.demi > 0 || r.drinks.culSec > 0) {
             anyoneDrinks = true;
-            var drinkText = formatRoundDrinks(r.drinks);
-            drinksHtml += '<div class="round-drinks-item">' +
-                '<span class="avatar">' + r.emoji + '</span>' +
-                '<span class="name">' + r.name + '</span>' +
-                '<span class="drinks">' + drinkText + '</span>' +
-            '</div>';
+            drinksHtml += '<div class="round-drinks-item"><span class="avatar">' + r.emoji + '</span><span class="name">' + r.name + '</span><span class="drinks">' + formatRoundDrinks(r.drinks) + '</span></div>';
         }
     });
     
     if (dealer && (dealerRoundDrinks.gorgees > 0 || dealerRoundDrinks.demi > 0 || dealerRoundDrinks.culSec > 0)) {
         anyoneDrinks = true;
-        var dealerDrinkText = formatRoundDrinks(dealerRoundDrinks);
         var detailText = dealerDrinksFrom.map(function(d) {
-            var txt = '';
-            if (d.gorgees > 0) txt = d.gorgees + ' de ' + d.name;
-            else if (d.demi > 0) txt = '½ de ' + d.name;
-            else if (d.culSec > 0) txt = d.culSec + ' cul sec de ' + d.name;
-            return txt;
+            if (d.gorgees > 0) return d.gorgees + ' de ' + d.name;
+            if (d.demi > 0) return '½ de ' + d.name;
+            if (d.culSec > 0) return d.culSec + ' cul sec de ' + d.name;
+            return '';
         }).join(', ');
         
-        drinksHtml += '<div class="round-drinks-item">' +
-            '<span class="avatar">' + dealer.emoji + '</span>' +
-            '<span class="name">' + dealer.name + ' (Banque)</span>' +
-            '<span class="drinks">' + dealerDrinkText + '</span>' +
-        '</div>';
-        if (detailText) {
-            drinksHtml += '<div class="round-drinks-detail">(' + detailText + ')</div>';
-        }
+        drinksHtml += '<div class="round-drinks-item"><span class="avatar">' + dealer.emoji + '</span><span class="name">' + dealer.name + ' (Banque)</span><span class="drinks">' + formatRoundDrinks(dealerRoundDrinks) + '</span></div>';
+        if (detailText) drinksHtml += '<div class="round-drinks-detail">(' + detailText + ')</div>';
     }
     
-    if (!anyoneDrinks) {
-        drinksHtml += '<div class="round-drinks-item"><span style="flex:1;text-align:center;color:var(--success);">Personne ne boit ! 🎉</span></div>';
-    }
+    if (!anyoneDrinks) drinksHtml += '<div class="round-drinks-item"><span style="flex:1;text-align:center;color:var(--success);">Personne ne boit ! 🎉</span></div>';
     
     document.getElementById('round-drinks').innerHTML = drinksHtml;
     
@@ -1266,30 +1079,16 @@ function updateResults() {
     
     document.getElementById('scoreboard').innerHTML = sorted.map(function(p, i) {
         var rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
-        var drinks = formatDrinks(p);
         var totalScore = (p.totalGorgees || 0) + (p.totalDemi || 0) * GORGEES_PAR_DEMI + (p.totalCulSec || 0) * GORGEES_PAR_CULSEC;
-        return '<div class="score-item ' + (i===0?'first':'') + '">' +
-            '<span class="rank">' + rank + '</span>' +
-            '<span class="avatar">' + p.emoji + '</span>' +
-            '<div class="info"><div class="name">' + p.name + (p.id===localState.dealer?' (Banque)':'') + '</div>' +
-            '<div class="total-score">' + totalScore + ' gorgées</div></div>' +
-            '<span class="drinks">' + drinks + '</span>' +
-        '</div>';
+        return '<div class="score-item ' + (i===0?'first':'') + '"><span class="rank">' + rank + '</span><span class="avatar">' + p.emoji + '</span><div class="info"><div class="name">' + p.name + (p.id===localState.dealer?' (Banque)':'') + '</div><div class="total-score">' + totalScore + ' gorgées</div></div><span class="drinks">' + formatDrinks(p) + '</span></div>';
     }).join('');
     
     document.getElementById('btn-next-round').style.display = isHost ? 'block' : 'none';
 }
 
 function formatRoundDrinks(d) {
-    var gorgees = d.gorgees || 0;
-    var demi = d.demi || 0;
-    var culSec = d.culSec || 0;
-    
-    while (demi >= 2) {
-        demi -= 2;
-        culSec += 1;
-    }
-    
+    var gorgees = d.gorgees || 0, demi = d.demi || 0, culSec = d.culSec || 0;
+    while (demi >= 2) { demi -= 2; culSec += 1; }
     var parts = [];
     if (gorgees > 0) parts.push(gorgees + ' 🍺');
     if (demi > 0) parts.push(demi + ' ½');
@@ -1298,15 +1097,8 @@ function formatRoundDrinks(d) {
 }
 
 function formatDrinks(p) {
-    var gorgees = p.totalGorgees || 0;
-    var demi = p.totalDemi || 0;
-    var culSec = p.totalCulSec || 0;
-    
-    while (demi >= 2) {
-        demi -= 2;
-        culSec += 1;
-    }
-    
+    var gorgees = p.totalGorgees || 0, demi = p.totalDemi || 0, culSec = p.totalCulSec || 0;
+    while (demi >= 2) { demi -= 2; culSec += 1; }
     var parts = [];
     if (gorgees > 0) parts.push(gorgees + ' 🍺');
     if (demi > 0) parts.push(demi + ' ½');
@@ -1322,53 +1114,33 @@ function showMyResult() {
     var handResults = JSON.parse(me.handResults || '[]');
     var bet = JSON.parse(me.bet || '{}');
     
-    var icon, title, drinkText, drinkClass = '';
-    
     var wonCount = handResults.filter(function(r) { return r === 'won'; }).length;
     var lostCount = handResults.filter(function(r) { return r === 'lost'; }).length;
     var totalHands = hands.length;
-    
     var culSecMultiplier = bet.doubled ? 2 : 1;
     
-    var gorgeesLost = 0;
-    var culSecLost = 0;
-    var demiLost = 0;
-    
-    if (bet.type === 'culsec') culSecLost = lostCount * culSecMultiplier;
-    else if (bet.type === 'demi') demiLost = lostCount;
-    else gorgeesLost = lostCount * bet.amount;
+    var icon, title, drinkText, drinkClass = '';
     
     if (me.status === 'won') {
-        icon = '🎉';
-        title = totalHands > 1 ? 'Tu as gagné ' + wonCount + '/' + totalHands + ' mains !' : 'Tu as gagné !';
-        drinkText = 'Safe !';
-        drinkClass = 'safe';
+        icon = '🎉'; title = totalHands > 1 ? 'Tu as gagné ' + wonCount + '/' + totalHands + ' mains !' : 'Tu as gagné !';
+        drinkText = 'Safe !'; drinkClass = 'safe';
     } else if (me.status === 'mixed') {
-        icon = '😬';
-        title = 'Mix : ' + wonCount + ' gagné, ' + lostCount + ' perdu';
-        if (bet.type === 'culsec') drinkText = culSecLost + ' 🍻 CUL SEC !';
-        else if (bet.type === 'demi') drinkText = demiLost + ' ½ CUL SEC !';
-        else drinkText = '+' + gorgeesLost + ' gorgées';
+        icon = '😬'; title = 'Mix : ' + wonCount + ' gagné, ' + lostCount + ' perdu';
+        if (bet.type === 'culsec') drinkText = (lostCount * culSecMultiplier) + ' 🍻 CUL SEC !';
+        else if (bet.type === 'demi') drinkText = lostCount + ' ½ CUL SEC !';
+        else drinkText = '+' + (lostCount * bet.amount) + ' gorgées';
     } else if (me.status === 'lost') {
-        icon = '😅';
-        title = totalHands > 1 ? 'Perdu ' + lostCount + '/' + totalHands + ' mains...' : 'Perdu...';
-        if (bet.type === 'culsec') drinkText = culSecLost + ' 🍻 CUL SEC !';
-        else if (bet.type === 'demi') drinkText = demiLost + ' ½ CUL SEC !';
-        else drinkText = '+' + gorgeesLost + ' gorgées';
+        icon = '😅'; title = totalHands > 1 ? 'Perdu ' + lostCount + '/' + totalHands + ' mains...' : 'Perdu...';
+        if (bet.type === 'culsec') drinkText = (lostCount * culSecMultiplier) + ' 🍻 CUL SEC !';
+        else if (bet.type === 'demi') drinkText = lostCount + ' ½ CUL SEC !';
+        else drinkText = '+' + (lostCount * bet.amount) + ' gorgées';
     } else {
-        icon = '🤝';
-        title = 'Égalité !';
-        drinkText = 'Safe !';
-        drinkClass = 'safe';
+        icon = '🤝'; title = 'Égalité !'; drinkText = 'Safe !'; drinkClass = 'safe';
     }
-    
-    var scoresText = hands.map(function(hand, i) {
-        return 'M' + (i+1) + ': ' + calcScore(hand);
-    }).join(' | ');
     
     document.getElementById('result-icon').textContent = icon;
     document.getElementById('result-title').textContent = title;
-    document.getElementById('result-subtitle').textContent = totalHands > 1 ? scoresText : 'Score: ' + calcScore(hands[0]);
+    document.getElementById('result-subtitle').textContent = totalHands > 1 ? hands.map(function(h, i) { return 'M' + (i+1) + ': ' + calcScore(h); }).join(' | ') : 'Score: ' + calcScore(hands[0]);
     document.getElementById('result-drinks').textContent = drinkText;
     document.getElementById('result-drinks').className = 'result-drinks ' + drinkClass;
     document.getElementById('result-overlay').style.display = 'flex';
@@ -1395,23 +1167,15 @@ function nextRound() {
     
     var updates = {};
     
-    // Nouveau paquet = nouveau croupier
     if (deck.length < 15) {
         deck = createDeck();
-        
-        var eligibleDealers = players.filter(function(p) { return p.id !== currentDealer; });
-        
-        if (eligibleDealers.length > 0) {
-            var currentIdx = players.findIndex(function(p) { return p.id === currentDealer; });
-            var nextIdx = (currentIdx + 1) % players.length;
+        var currentIdx = players.findIndex(function(p) { return p.id === currentDealer; });
+        var nextIdx = (currentIdx + 1) % players.length;
+        newDealer = players[nextIdx].id;
+        if (newDealer === currentDealer && players.length > 1) {
+            nextIdx = (nextIdx + 1) % players.length;
             newDealer = players[nextIdx].id;
-            
-            if (newDealer === currentDealer && players.length > 1) {
-                nextIdx = (nextIdx + 1) % players.length;
-                newDealer = players[nextIdx].id;
-            }
         }
-        
         toast('Nouveau paquet ! Nouveau croupier ! 🎲', 'info');
     }
     
@@ -1445,5 +1209,4 @@ function showFinalScores() {
     document.getElementById('btn-next-round').style.display = 'none';
 }
 
-// ========== START ==========
 init();

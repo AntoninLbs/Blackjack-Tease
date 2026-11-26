@@ -1,0 +1,5 @@
+{
+  "redirects": [
+    { "source": "/(.*)", "destination": "https://blackjack-tease.okavio.com/$1", "permanent": true }
+  ]
+}
